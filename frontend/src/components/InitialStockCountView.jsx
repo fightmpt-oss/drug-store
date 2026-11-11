@@ -930,10 +930,10 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
             <button
               onClick={handleOpenMatchModalFromDefault}
               className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black rounded-xl text-xs shadow-md transition-all active:scale-95"
-              title="ตรวจสอบและจับคู่ยาคงเหลือ ณ 1 ต.ค. 2569 จากไฟล์ ใบเบิกยา รพสต69.xlsx ก่อนนำเข้า"
+              title="ตรวจสอบและจับคู่ยาคงเหลือเริ่มต้นปีงบประมาณจากไฟล์ Excel ก่อนนำเข้า"
             >
               <Sparkles className="w-4 h-4 text-slate-950" />
-              <span>ตรวจสอบ & Match ยา (ใบเบิกยา รพสต69)</span>
+              <span>ตรวจสอบ & Match ยา</span>
             </button>
 
             <button
@@ -1724,19 +1724,19 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center space-x-2 text-amber-900 font-bold text-xs">
                   <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>พบไฟล์ยอดคงเหลือ "ใบเบิกยา รพสต69.xlsx"</span>
+                  <span>ตรวจสอบ &amp; Match ยอดคงเหลือเริ่มต้น</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => { setShowUploadModal(false); handleOpenMatchModalFromDefault(); }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-xs shadow-xs transition-all text-center"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-lg text-xs shadow-xs transition-all text-center cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>เปิดตรวจสอบ &amp; Match ทันที</span>
                 </button>
               </div>
               <p className="text-[11px] text-amber-800">
-                ตรวจสอบการจับคู่ยาและยอดคงเหลือจริง 138 รายการ ณ 1 ต.ค. 2569 ก่อนกดยืนยันบันทึกเข้าระบบ
+                ตรวจสอบการจับคู่ยาและยอดคงเหลือจริงจากไฟล์ Excel เริ่มต้นปีงบประมาณ ก่อนกดยืนยันบันทึกเข้าระบบ
               </p>
             </div>
 
@@ -1814,7 +1814,7 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
                     ตรวจสอบและจับคู่ยาคงเหลือ ณ 1 ต.ค. 2569 (เริ่มต้นปีงบประมาณ 2570)
                   </h3>
                   <p className="text-xs text-emerald-200/90 mt-0.5">
-                    ไฟล์: <span className="font-bold text-white underline">{matchPreviewData?.fileName || 'ใบเบิกยา รพสต69.xlsx'}</span> 
+                    ไฟล์: <span className="font-bold text-white underline">{matchPreviewData?.fileName || 'ไฟล์ Excel ยอดคงเหลือ'}</span> 
                     {matchPreviewData?.sheetName && ` | แผ่นงาน: ${matchPreviewData.sheetName}`} 
                     {' '}(ทั้งหมด {matchStats.total} แถว | มียอดคงเหลือจริง {matchStats.nonZero} รายการ)
                   </p>

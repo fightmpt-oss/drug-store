@@ -496,24 +496,47 @@ async function importFromExcel(buffer, actor = 'เจ้าหน้าที�
   };
 }
 
+function findInitialStockExcelFile() {
+  const checkDirs = [
+    process.cwd(),
+    path.resolve(process.cwd(), 'received_documents/excel')
+  ];
+  for (const dir of checkDirs) {
+    if (!fs.existsSync(dir)) continue;
+    try {
+      const files = fs.readdirSync(dir);
+      const match = files.find(f => {
+        const lower = f.toLowerCase();
+        if (lower.startsWith('~$') || lower.startsWith('.')) return false;
+        if (lower.includes('dtam')) return false;
+        return lower.endsWith('.xlsx') || lower.endsWith('.xls');
+      });
+      if (match) return path.join(dir, match);
+    } catch (e) {
+      // ignore
+    }
+  }
+  return null;
+}
+
 // -------------------------------------------------------------------------
 // แสดงตัวอย่างการจับคู่ยาจากไฟล์ Excel (ยังไม่บันทึกจริง เพื่อให้ผู้ใช้ตรวจสอบและ Match ก่อน)
 // -------------------------------------------------------------------------
 async function previewExcelInitialStock(bufferOrPath = null) {
   let wb;
-  let sourceFileName = 'ใบเบิกยา รพสต69.xlsx';
+  let sourceFileName = 'ไฟล์ Excel ยอดคงเหลือ';
   if (Buffer.isBuffer(bufferOrPath)) {
     wb = xlsx.read(bufferOrPath, { type: 'buffer', cellDates: true, cellNF: true, cellText: true });
     sourceFileName = 'ไฟล์ Excel ที่อัปโหลด';
   } else {
-    const defaultPath = bufferOrPath || path.resolve(process.cwd(), 'ใบเบิกยา รพสต69.xlsx');
-    if (!fs.existsSync(defaultPath)) {
-      const err = new Error(`ไม่พบไฟล์ Excel: ${defaultPath}`);
+    const targetPath = bufferOrPath || findInitialStockExcelFile();
+    if (!targetPath || !fs.existsSync(targetPath)) {
+      const err = new Error('ไม่พบไฟล์ Excel ยอดยกมาในระบบ กรุณากดปุ่ม "นำเข้า Excel ยอดนับ" เพื่อเลือกไฟล์จากคอมพิวเตอร์ของคุณ');
       err.status = 404;
       throw err;
     }
-    wb = xlsx.readFile(defaultPath, { cellDates: true, cellNF: true, cellText: true });
-    sourceFileName = path.basename(defaultPath);
+    wb = xlsx.readFile(targetPath, { cellDates: true, cellNF: true, cellText: true });
+    sourceFileName = path.basename(targetPath);
   }
 
   let sheetName = wb.SheetNames.find(n => n.includes('ยาคงเหลือ')) || wb.SheetNames[0];
