@@ -464,6 +464,21 @@ export default function DashboardView({
     }
   };
 
+  // ตรวจจับชื่อ Preset ปัจจุบัน สำหรับแสดงผลใน Dropdown
+  const currentPreset = (() => {
+    const fy = currentFiscalYear();
+    const pfy = prevFiscalYear();
+    if (dateRange.startDate === fy.startDate && dateRange.endDate === fy.endDate) return 'fy_current';
+    if (dateRange.startDate === pfy.startDate && dateRange.endDate === pfy.endDate) return 'fy_prev';
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    if (dateRange.startDate === `${yyyy}-${mm}-01` && dateRange.endDate === `${yyyy}-${mm}-${dd}`) return 'this_month';
+    if (dateRange.startDate === `${yyyy}-01-01` && dateRange.endDate === `${yyyy}-${mm}-${dd}`) return 'ytd';
+    return 'custom';
+  })();
+
   const summary = data?.summaryCounts || {
     totalDrugs: 0,
     activeDrugs: 0,
@@ -604,81 +619,61 @@ export default function DashboardView({
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+      {/* Page Header (จัดวางแบบ Modern Clean: หัวข้อกระชับ 1 บรรทัด และตัวเลือกรอบบัญชีสวยงาม) */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-1">
         <div>
-          <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-slate-900 tracking-tight flex items-center space-x-2">
-            <span>ภาพรวมคลังยา & ตรวจสอบสถานะ Drug Stock (ตามโครงสร้าง JHCIS)</span>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center space-x-2">
+            <span>ภาพรวมสต็อกและคลังยา รพ.สต.</span>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+              JHCIS DB
+            </span>
           </h1>
-          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-            เชื่อมโยงฐานข้อมูล JHCIS (cdrug, visitdrug, drugstorereceive) รองรับการจัดกลุ่มยา รหัส TMT 6/24 หลัก และตรวจสอบวันหมดอายุ (FEFO)
+          <p className="text-xs text-slate-500 mt-1">
+            ระบบสต็อกการ์ดคำนวณยอดยกมา รับเข้า จ่ายออกจริงจาก JHCIS (visitdrug) และตรวจสอบวันหมดอายุ (FEFO)
           </p>
         </div>
 
-        {/* Date Filter & Presets (ย้ายขึ้นมาแทนที่ตำแหน่งเดิมของผู้ใช้งานที่ตัดออก) */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-2xs shrink-0 w-full lg:w-auto">
-          <div className="flex items-center space-x-1.5 text-xs text-slate-700 pl-1 shrink-0 font-medium">
+        {/* Date Filter & Presets (รอบปีงบประมาณ / รอบบัญชีตัดสต็อก กระทัดรัด ไม่เบียดหัวข้อ) */}
+        <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-1.5 rounded-2xl border border-slate-200 shadow-2xs shrink-0 w-full sm:w-auto">
+          <div className="flex items-center space-x-1.5 text-xs text-slate-700 shrink-0 font-bold">
             <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">ช่วงเวลา:</span>
+            <span className="hidden sm:inline">รอบบัญชี:</span>
           </div>
 
-          <div className="flex items-center space-x-1">
+          <select
+            value={currentPreset}
+            onChange={(e) => {
+              if (e.target.value !== 'custom') {
+                setPresetRange(e.target.value);
+              }
+            }}
+            className="text-xs font-bold text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-emerald-500 cursor-pointer shadow-2xs"
+            title="เลือกรอบปีงบประมาณหรือช่วงเวลาสำหรับคำนวณยอดยกมา รับเข้า จ่ายออก และคงเหลือ"
+          >
+            <option value="fy_current">{currentFiscalYear().label} (1 ต.ค. 69 - 30 ก.ย. 70)</option>
+            <option value="fy_prev">{prevFiscalYear().label} (1 ต.ค. 68 - 30 ก.ย. 69)</option>
+            <option value="this_month">เดือนปัจจุบัน</option>
+            <option value="last_3_months">ไตรมาสล่าสุด (3 เดือน)</option>
+            <option value="ytd">ทั้งปีปฏิทิน</option>
+            <option value="custom">กำหนดช่วงวันที่เอง...</option>
+          </select>
+
+          <div className="flex items-center space-x-1 pl-1 border-l border-slate-200">
             <input
               type="date"
               value={dateRange.startDate}
               onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-              className="text-xs border border-slate-200 rounded-md px-2 py-1 bg-slate-50 text-slate-800 font-semibold focus:outline-emerald-500"
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 text-slate-800 font-semibold focus:outline-emerald-500 focus:bg-white shadow-2xs"
+              title="วันที่เริ่มต้นรอบบัญชี (สำหรับคำนวณยอดยกมา)"
             />
             <span className="text-xs text-slate-400 font-medium">-</span>
             <input
               type="date"
               value={dateRange.endDate}
               onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-              className="text-xs border border-slate-200 rounded-md px-2 py-1 bg-slate-50 text-slate-800 font-semibold focus:outline-emerald-500"
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 text-slate-800 font-semibold focus:outline-emerald-500 focus:bg-white shadow-2xs"
+              title="วันที่สิ้นสุดรอบบัญชี (สำหรับคำนวณยอดคงเหลือสิ้นงวด)"
             />
-          </div>
-
-          <div className="border-l border-slate-200 pl-1.5 flex flex-wrap gap-1 shrink-0">
-            <button
-              onClick={() => setPresetRange('fy_current')}
-              className={`text-xs px-2 py-1 rounded font-bold transition-all cursor-pointer ${
-                dateRange.startDate === currentFiscalYear().startDate && dateRange.endDate === currentFiscalYear().endDate
-                  ? 'bg-purple-600 text-white shadow-2xs'
-                  : 'bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200'
-              }`}
-              title={`ปีงบประมาณปัจจุบัน (${currentFiscalYear().startDate} - ${currentFiscalYear().endDate})`}
-            >
-              {currentFiscalYear().label}
-            </button>
-            <button
-              onClick={() => setPresetRange('fy_prev')}
-              className={`text-xs px-2 py-1 rounded font-bold transition-all cursor-pointer ${
-                dateRange.startDate === prevFiscalYear().startDate && dateRange.endDate === prevFiscalYear().endDate
-                  ? 'bg-purple-600 text-white shadow-2xs'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-800'
-              }`}
-              title={`ปีงบประมาณก่อนหน้า (${prevFiscalYear().startDate} - ${prevFiscalYear().endDate})`}
-            >
-              {prevFiscalYear().label}
-            </button>
-            <button
-              onClick={() => setPresetRange('this_month')}
-              className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition-colors cursor-pointer"
-            >
-              เดือนนี้
-            </button>
-            <button
-              onClick={() => setPresetRange('last_3_months')}
-              className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition-colors cursor-pointer"
-            >
-              3 เดือน
-            </button>
-            <button
-              onClick={() => setPresetRange('ytd')}
-              className="text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition-colors cursor-pointer"
-            >
-              ทั้งปี
-            </button>
           </div>
         </div>
       </div>
