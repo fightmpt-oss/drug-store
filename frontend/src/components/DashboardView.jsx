@@ -988,9 +988,46 @@ export default function DashboardView({
 
           </div>
 
-          <div className="text-[11px] text-slate-500 hidden xl:flex items-center space-x-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            <span>*ค่าเริ่มต้น <strong className="text-emerald-700 font-bold">1:ใช้ยา</strong> และ <strong className="text-emerald-700 font-bold">ยาแผนปัจจุบัน</strong> เหมือนหน้าจอ JHCIS</span>
+          {/* Quick Action Buttons (ตรวจนับสต็อก, นำเข้า Excel, เบิกยา QR) จัดวางด้านบน ไม่เบียดแถบค้นหา */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onNavigateToCount && (
+              <button
+                type="button"
+                onClick={onNavigateToCount}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
+                title="ไปที่หน้าบันทึกตรวจนับสต็อกยกมาเริ่มต้นรอบใหม่"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5 text-teal-600" />
+                <span>ตรวจนับสต็อกยกมา</span>
+                {summary?.countedDrugs > 0 && (
+                  <span className="bg-teal-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+                    {summary.countedDrugs}
+                  </span>
+                )}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onNavigateToImport}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer hover:shadow-sm active:scale-95"
+              title="ไปที่หน้านำเข้าใบรับยาจาก รพ.แม่ข่าย (Excel / PDF)"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ นำเข้า Excel รับยา</span>
+            </button>
+
+            {onOpenSubstockQr && (
+              <button
+                type="button"
+                onClick={() => onOpenSubstockQr(null)}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
+                title="สแกน QR Code เพื่อเบิกยาจากคลังยาในออกไปยังจุดจ่ายยาหน้าเคาน์เตอร์"
+              >
+                <QrCode className="w-3.5 h-3.5 text-indigo-600" />
+                <span>เบิกยาคลังใน (QR)</span>
+              </button>
+            )}
           </div>
 
         </div>
@@ -1164,28 +1201,29 @@ export default function DashboardView({
 
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs flex flex-col md:flex-row justify-between items-center gap-2">
-        <div className="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto flex-1">
+      {/* Filter and Search Bar (เฉพาะค้นหาและจัดการการแสดงผลตาราง สะอาดตา ไม่ล้นจอ) */}
+      <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col md:flex-row justify-between items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 w-full flex-1">
           {/* Global Search box */}
-          <form onSubmit={handleSearchSubmit} className="relative w-full sm:w-80 lg:w-96">
+          <form onSubmit={handleSearchSubmit} className="relative flex-1 min-w-[220px] max-w-md">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="ค้นหาชื่อยา (ไทย/อังกฤษ), รหัสยา, รหัส TMT 6 หรือ 24 หลัก..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white focus:outline-emerald-500 text-slate-800 font-medium"
+              className="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-emerald-500 text-slate-800 font-medium shadow-2xs"
             />
           </form>
 
           {/* Toggle Column Filters Row Button */}
           <button
+            type="button"
             onClick={() => setShowColumnFilters(!showColumnFilters)}
-            className={`flex items-center space-x-1 px-2.5 py-1.5 border rounded-lg text-xs font-semibold transition-colors shrink-0 ${
+            className={`flex items-center space-x-1 px-2.5 py-1.5 border rounded-xl text-xs font-semibold transition-colors shrink-0 cursor-pointer shadow-2xs ${
               showColumnFilters 
                 ? 'bg-emerald-50 border-emerald-300 text-emerald-800' 
-                : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+                : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
             }`}
             title="เปิด/ปิดแถวตัวกรองค้นหาที่หัวตาราง"
           >
@@ -1195,6 +1233,7 @@ export default function DashboardView({
 
           {/* Quick Clear / Reset */}
           <button
+            type="button"
             onClick={() => { 
               setSearch(''); 
               setStatusFilter('all'); 
@@ -1206,7 +1245,7 @@ export default function DashboardView({
               setPage(1); 
               loadData(1, pageSize); 
             }}
-            className="flex items-center space-x-1 px-2.5 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-xs font-semibold transition-colors shrink-0"
+            className="flex items-center space-x-1 px-2.5 py-1.5 border border-slate-200 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 text-xs font-semibold transition-colors shrink-0 cursor-pointer shadow-2xs"
             title="รีเซ็ตตัวกรองและการจัดเรียงเป็นค่าเริ่มต้น (ยาแผนปัจจุบัน ที่มีใช้ยา)"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -1214,12 +1253,12 @@ export default function DashboardView({
           </button>
 
           {/* Table Density / Font Size Selector (ปรับขนาดอักษรตามขนาดจอ) */}
-          <div className="flex items-center space-x-0.5 p-0.5 bg-slate-100 rounded-lg border border-slate-200 shrink-0" title="ปรับขนาดตัวอักษรของตาราง">
+          <div className="flex items-center space-x-0.5 p-0.5 bg-slate-100 rounded-xl border border-slate-200 shrink-0 shadow-2xs" title="ปรับขนาดตัวอักษรของตาราง">
             <span className="text-[10px] text-slate-400 font-bold px-1.5 hidden xl:inline">ขนาดอักษร:</span>
             <button
               type="button"
               onClick={() => handleSetDensity('compact')}
-              className={`px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+              className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 tableDensity === 'compact'
                   ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
                   : 'text-slate-500 hover:text-slate-900'
@@ -1231,7 +1270,7 @@ export default function DashboardView({
             <button
               type="button"
               onClick={() => handleSetDensity('normal')}
-              className={`px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+              className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 tableDensity === 'normal'
                   ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
                   : 'text-slate-500 hover:text-slate-900'
@@ -1243,7 +1282,7 @@ export default function DashboardView({
             <button
               type="button"
               onClick={() => handleSetDensity('large')}
-              className={`px-2 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
+              className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 tableDensity === 'large'
                   ? 'bg-white text-emerald-700 shadow-2xs font-extrabold'
                   : 'text-slate-500 hover:text-slate-900'
@@ -1255,54 +1294,20 @@ export default function DashboardView({
           </div>
         </div>
 
-        <div className="flex items-center space-x-2 w-full md:w-auto justify-end shrink-0">
-          {sortBy !== 'default' && (
-            <div className="flex items-center space-x-1 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-1 rounded-lg">
-              <span>เรียงตาม: <strong>{sortBy}</strong> ({sortOrder === 'asc' ? 'น้อยไปมาก' : 'มากไปน้อย'})</span>
-              <button 
-                onClick={() => { setSortBy('default'); setSortOrder('asc'); setPage(1); }}
-                className="text-emerald-700 hover:text-rose-600 ml-1 p-0.5 rounded transition-colors"
-                title="ยกเลิกการเรียง"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
-          {onNavigateToCount && (
-            <button
-              onClick={onNavigateToCount}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors shrink-0 whitespace-nowrap"
-              title="ไปที่หน้าบันทึกตรวจนับสต็อกยกมาเริ่มต้นรอบใหม่"
+        {/* Active Sort Indicator (ถ้ามีการคลิกเรียงคอลัมน์) */}
+        {sortBy !== 'default' && (
+          <div className="flex items-center space-x-1 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-xl shrink-0 shadow-2xs">
+            <span>เรียงตาม: <strong>{sortBy}</strong> ({sortOrder === 'asc' ? 'น้อยไปมาก' : 'มากไปน้อย'})</span>
+            <button 
+              type="button"
+              onClick={() => { setSortBy('default'); setSortOrder('asc'); setPage(1); }}
+              className="text-emerald-700 hover:text-rose-600 ml-1 p-0.5 rounded transition-colors cursor-pointer"
+              title="ยกเลิกการเรียง"
             >
-              <ClipboardCheck className="w-3.5 h-3.5" />
-              <span>ตรวจนับสต็อกยกมา</span>
-              {summary?.countedDrugs > 0 && (
-                <span className="bg-teal-800 text-teal-100 text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
-                  {summary.countedDrugs}
-                </span>
-              )}
+              <X className="w-3.5 h-3.5" />
             </button>
-          )}
-
-          <button
-            onClick={onNavigateToImport}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors shrink-0 whitespace-nowrap cursor-pointer"
-          >
-            <span>+ นำเข้า Excel รับยา</span>
-          </button>
-
-          {onOpenSubstockQr && (
-            <button
-              onClick={() => onOpenSubstockQr(null)}
-              className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors shrink-0 whitespace-nowrap cursor-pointer"
-              title="สแกน QR Code เพื่อเบิกยาจากคลังยาในออกไปยังจุดจ่ายยาหน้าเคาน์เตอร์"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>เบิกยาคลังใน (QR)</span>
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Top Pagination Bar */}
