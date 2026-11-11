@@ -594,22 +594,27 @@ async function getDrugStockSummary(filters = {}) {
   });
 
   // ---------- Summary counts ----------
-  const activeOnly = d => d.drugflag === '1';
+  const flagMatcher = d => {
+    if (drugFlagFilter === '2') return d.drugflag === '2' || !d.drugflag;
+    if (drugFlagFilter === 'all') return true;
+    return d.drugflag === '1';
+  };
+
   const summaryCounts = {
     totalDrugs: drugMetrics.length,
-    activeDrugs: drugMetrics.filter(d => activeOnly(d)).length,
-    inactiveDrugs: drugMetrics.filter(d => d.drugflag === '2').length,
-    countedDrugs: drugMetrics.filter(d => d.isCounted && activeOnly(d)).length,
-    uncountedDrugs: drugMetrics.filter(d => !d.isCounted && activeOnly(d)).length,
-    modernDrugs: drugMetrics.filter(d => d.drugtype === '01' && activeOnly(d)).length,
-    procedureDrugs: drugMetrics.filter(d => d.drugtype === '02' && activeOnly(d)).length,
-    herbalDrugs: drugMetrics.filter(d => d.drugtype === '10' && activeOnly(d)).length,
-    vaccineDrugs: drugMetrics.filter(d => d.drugtype === '05' && activeOnly(d)).length,
-    contraceptiveDrugs: drugMetrics.filter(d => d.drugtype === '04' && activeOnly(d)).length,
-    materialDrugs: drugMetrics.filter(d => (d.drugtype === '03' || d.drugtype === '11') && activeOnly(d)).length,
-    serviceItems: drugMetrics.filter(d => (d.drugtype === '06' || d.drugtype === '07') && activeOnly(d)).length,
-    antibioticDrugs: drugMetrics.filter(d => d.isAntibiotic && activeOnly(d)).length,
-    dentalDrugs: drugMetrics.filter(d => d.isDental && activeOnly(d)).length,
+    activeDrugs: drugMetrics.filter(d => d.drugflag === '1').length,
+    inactiveDrugs: drugMetrics.filter(d => d.drugflag === '2' || !d.drugflag).length,
+    countedDrugs: drugMetrics.filter(d => d.isCounted && flagMatcher(d)).length,
+    uncountedDrugs: drugMetrics.filter(d => !d.isCounted && flagMatcher(d)).length,
+    modernDrugs: drugMetrics.filter(d => d.drugtype === '01' && flagMatcher(d)).length,
+    procedureDrugs: drugMetrics.filter(d => d.drugtype === '02' && flagMatcher(d)).length,
+    herbalDrugs: drugMetrics.filter(d => d.drugtype === '10' && flagMatcher(d)).length,
+    vaccineDrugs: drugMetrics.filter(d => d.drugtype === '05' && flagMatcher(d)).length,
+    contraceptiveDrugs: drugMetrics.filter(d => d.drugtype === '04' && flagMatcher(d)).length,
+    materialDrugs: drugMetrics.filter(d => (d.drugtype === '03' || d.drugtype === '11') && flagMatcher(d)).length,
+    serviceItems: drugMetrics.filter(d => (d.drugtype === '06' || d.drugtype === '07') && flagMatcher(d)).length,
+    antibioticDrugs: drugMetrics.filter(d => d.isAntibiotic && flagMatcher(d)).length,
+    dentalDrugs: drugMetrics.filter(d => d.isDental && flagMatcher(d)).length,
     lowStock: drugMetrics.filter(d => d.statuses.some(s => s.code === 'LOW_STOCK')).length,
     nearExpiry: drugMetrics.filter(d => d.statuses.some(s => s.code === 'CRITICAL_EXPIRY' || s.code === 'NEAR_EXPIRY')).length,
     expired: drugMetrics.filter(d => d.statuses.some(s => s.code === 'EXPIRED')).length,
@@ -642,13 +647,27 @@ async function getDrugStockSummary(filters = {}) {
     else if (drugFlagFilter === '2') filtered = filtered.filter(d => d.drugflag === '2' || !d.drugflag);
   }
 
+  // รองรับทั้งแบบเดี่ยว, แบบ array, และแบบ comma-separated string เช่น "01,10"
   if (drugTypeFilter && drugTypeFilter !== 'all') {
-    if (drugTypeFilter === '01_10') filtered = filtered.filter(d => d.drugtype === '01' || d.drugtype === '10');
-    else if (drugTypeFilter === '03_11') filtered = filtered.filter(d => d.drugtype === '03' || d.drugtype === '11');
-    else if (drugTypeFilter === '02_07') filtered = filtered.filter(d => d.drugtype === '02' || d.drugtype === '07' || d.drugtype === '06');
-    else if (drugTypeFilter === 'antibio') filtered = filtered.filter(d => d.isAntibiotic);
-    else if (drugTypeFilter === 'dental') filtered = filtered.filter(d => d.isDental);
-    else filtered = filtered.filter(d => (d.drugtype || '') === drugTypeFilter);
+    let types = [];
+    if (Array.isArray(drugTypeFilter)) {
+      types = drugTypeFilter.flatMap(t => String(t).split(',')).map(t => t.trim()).filter(Boolean);
+    } else if (typeof drugTypeFilter === 'string') {
+      types = drugTypeFilter.split(',').map(t => t.trim()).filter(Boolean);
+    }
+
+    if (types.length > 0 && !types.includes('all')) {
+      const matchCat = (d, cat) => {
+        if (cat === '01_10') return d.drugtype === '01' || d.drugtype === '10';
+        if (cat === '03_11') return d.drugtype === '03' || d.drugtype === '11';
+        if (cat === '02_07') return d.drugtype === '02' || d.drugtype === '07' || d.drugtype === '06';
+        if (cat === 'antibio') return Boolean(d.isAntibiotic);
+        if (cat === 'dental') return Boolean(d.isDental);
+        return (d.drugtype || '') === cat;
+      };
+
+      filtered = filtered.filter(d => types.some(cat => matchCat(d, cat)));
+    }
   }
 
   if (statusFilter && statusFilter !== 'all') {

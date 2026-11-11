@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   AlertOctagon, 
   Clock, 
@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
+  ChevronDown,
   Database,
   Users,
   Eye,
@@ -46,6 +47,20 @@ import { api } from '../services/api';
 import { currentFiscalYear, prevFiscalYear } from '../utils/fiscalYear';
 import PaginationBar from './PaginationBar';
 
+
+// นิยามกลุ่มเวชภัณฑ์ JHCIS ทั้งหมดสำหรับ Dropdown ตัวเลือกหลายกลุ่ม (Multi-Select)
+const ALL_JHCIS_CATEGORIES = [
+  { id: '01', label: 'ยาแผนปัจจุบัน', icon: Pill, countKey: 'modernDrugs' },
+  { id: '10', label: 'ยาสมุนไพร', icon: Leaf, countKey: 'herbalDrugs' },
+  { id: '02', label: 'หัตถการ (02)', icon: Stethoscope, countKey: 'procedureDrugs' },
+  { id: '05', label: 'วัคซีน', icon: Syringe, countKey: 'vaccineDrugs' },
+  { id: '04', label: 'เวชภัณฑ์คุมกำเนิด', icon: Shield, countKey: 'contraceptiveDrugs' },
+  { id: '03_11', label: 'เวชภัณฑ์มิใช่ยา/วัสดุ (03,11)', icon: Package, countKey: 'materialDrugs' },
+  { id: 'antibio', label: 'ยาปฏิชีวนะ (Anti-Bio)', icon: AlertTriangle, countKey: 'antibioticDrugs' },
+  { id: 'dental', label: 'ทันตกรรม', icon: Activity, countKey: 'dentalDrugs' },
+  { id: '02_07', label: 'ค่าบริการ & ตรวจแล็ป (06,07)', icon: Activity, countKey: 'serviceItems' }
+];
+
 export default function DashboardView({
   user,
   onLogout,
@@ -59,8 +74,29 @@ export default function DashboardView({
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [drugTypeFilter, setDrugTypeFilter] = useState('01'); // Default to modern medicine like JHCIS
+  const [selectedCategories, setSelectedCategories] = useState(['01']); // Default to modern medicine '01' like JHCIS
   const [drugFlagFilter, setDrugFlagFilter] = useState('1'); // Default to '1:ใช้ยา' like JHCIS
+  const [isFlagDropdownOpen, setIsFlagDropdownOpen] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [categorySearchText, setCategorySearchText] = useState('');
+  const flagDropdownRef = useRef(null);
+  const categoryDropdownRef = useRef(null);
+
+  // Click outside to close dropdowns
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (flagDropdownRef.current && !flagDropdownRef.current.contains(event.target)) {
+        setIsFlagDropdownOpen(false);
+      }
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -168,13 +204,17 @@ export default function DashboardView({
     counted: 'all'
   });
 
+  const drugTypeParam = selectedCategories.length === 0 || selectedCategories.length === ALL_JHCIS_CATEGORIES.length
+    ? 'all'
+    : selectedCategories.join(',');
+
   const loadData = async (targetPage = page, targetPageSize = pageSize) => {
     try {
       setLoading(true);
       const res = await api.getStockOverview({
         ...dateRange,
         statusFilter,
-        drugTypeFilter,
+        drugTypeFilter: drugTypeParam,
         drugFlagFilter,
         search,
         page: targetPage,
@@ -210,7 +250,7 @@ export default function DashboardView({
     return () => clearTimeout(timer);
   }, [
     statusFilter, 
-    drugTypeFilter, 
+    drugTypeParam, 
     drugFlagFilter, 
     sortBy, 
     sortOrder, 
@@ -440,20 +480,74 @@ export default function DashboardView({
     normal: 0
   };
 
-  // JHCIS Quick Category Filters — ทุกตัวเลขมาจาก summaryCounts ของ backend
-  const jhcisCategories = [
-    { id: '01', label: 'ยาแผนปัจจุบัน', icon: Pill, count: summary.modernDrugs },
-    { id: '10', label: 'ยาสมุนไพร', icon: Leaf, count: summary.herbalDrugs },
-    { id: '01_10', label: 'ยาแผนปัจจุบัน + สมุนไพร', icon: Package, count: (summary.modernDrugs || 0) + (summary.herbalDrugs || 0) },
-    { id: '02', label: 'หัตถการ (02)', icon: Stethoscope, count: summary.procedureDrugs || 0 },
-    { id: '05', label: 'วัคซีน', icon: Syringe, count: summary.vaccineDrugs },
-    { id: '04', label: 'เวชภัณฑ์คุมกำเนิด', icon: Shield, count: summary.contraceptiveDrugs },
-    { id: '03_11', label: 'เวชภัณฑ์มิใช่ยา/วัสดุ (03,11)', icon: Package, count: summary.materialDrugs },
-    { id: 'antibio', label: 'ยาปฏิชีวนะ (Anti-Bio)', icon: AlertTriangle, count: summary.antibioticDrugs },
-    { id: 'dental', label: 'ทันตกรรม', icon: Activity, count: summary.dentalDrugs },
-    { id: '02_07', label: 'ค่าบริการ & ตรวจแล็ป (06,07)', icon: Activity, count: summary.serviceItems || 0 },
-    { id: 'all', label: 'ทั้งหมดทุกหมวด', icon: Database, count: drugFlagFilter === '1' ? summary.activeDrugs : summary.totalDrugs }
-  ];
+  // กลุ่มเวชภัณฑ์พร้อมจำนวนนับตามสถานะที่เลือก
+  const selectableCategories = ALL_JHCIS_CATEGORIES.map(cat => ({
+    ...cat,
+    count: summary[cat.countKey] || 0
+  }));
+
+  const toggleCategory = (id) => {
+    setSelectedCategories(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(c => c !== id);
+      } else {
+        return [...prev, id];
+      }
+    });
+    setPage(1);
+  };
+
+  const handleSelectAllCategories = () => {
+    setSelectedCategories(ALL_JHCIS_CATEGORIES.map(c => c.id));
+    setPage(1);
+  };
+
+  const handleSelectOnlyDrugs = () => {
+    setSelectedCategories(['01', '10']);
+    setPage(1);
+  };
+
+  const handleClearCategories = () => {
+    setSelectedCategories([]);
+    setPage(1);
+  };
+
+  const categoryTriggerLabel = (() => {
+    if (selectedCategories.length === 0 || selectedCategories.length === ALL_JHCIS_CATEGORIES.length) {
+      return 'ทุกกลุ่มเวชภัณฑ์ (ทั้งหมด)';
+    }
+    if (selectedCategories.length === 1) {
+      const cat = ALL_JHCIS_CATEGORIES.find(c => c.id === selectedCategories[0]);
+      return cat ? cat.label : selectedCategories[0];
+    }
+    if (selectedCategories.length === 2) {
+      const labels = selectedCategories
+        .map(id => ALL_JHCIS_CATEGORIES.find(c => c.id === id)?.label)
+        .filter(Boolean);
+      return labels.join(', ');
+    }
+    const firstLabels = selectedCategories.slice(0, 2)
+      .map(id => ALL_JHCIS_CATEGORIES.find(c => c.id === id)?.label)
+      .filter(Boolean)
+      .join(', ');
+    return `เลือก ${selectedCategories.length} กลุ่ม (${firstLabels}...)`;
+  })();
+
+  const selectedCategoriesTotalCount = (() => {
+    if (selectedCategories.length === 0 || selectedCategories.length === ALL_JHCIS_CATEGORIES.length) {
+      return drugFlagFilter === '1' ? summary.activeDrugs : summary.totalDrugs;
+    }
+    return selectedCategories.reduce((sum, id) => {
+      const cat = selectableCategories.find(c => c.id === id);
+      return sum + (cat?.count || 0);
+    }, 0);
+  })();
+
+  const filteredCategoryOptions = selectableCategories.filter(cat =>
+    !categorySearchText ||
+    cat.label.toLowerCase().includes(categorySearchText.toLowerCase()) ||
+    cat.id.toLowerCase().includes(categorySearchText.toLowerCase())
+  );
 
   const STATUS_SHORT_MAP = {
     NEGATIVE_STOCK: 'สต็อกติดลบ',
@@ -589,96 +683,354 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* JHCIS Classification Bar (เหมือนแถบตัวเลือกในโปรแกรม JHCIS) */}
-      <div className="bg-white p-2.5 sm:p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+      {/* JHCIS Classification Bar (Dropdowns สำหรับสถานะการใช้ยา & กลุ่มเวชภัณฑ์แบบติ๊กเลือกได้หลายหัวข้อ) */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           
-          {/* Status Selection: มีใช้ยา vs ไม่ใช้ยา vs ทั้งหมด */}
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-slate-700 flex items-center space-x-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-              <span>สถานะการใช้ยาใน JHCIS:</span>
-            </span>
-            <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-xs font-semibold">
-              <button
-                onClick={() => setDrugFlagFilter('1')}
-                className={`px-3 py-1 rounded-md transition-all inline-flex items-center space-x-1.5 ${
-                  drugFlagFilter === '1'
-                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="แสดงเฉพาะรายการยาและเวชภัณฑ์ที่มีสถานะ ..มีใช้ยา (รหัส 1:ใช้ยา)"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-2xs"></span>
-                <span>มีใช้ยา (1:ใช้ยา)</span>
-              </button>
-              <button
-                onClick={() => setDrugFlagFilter('2')}
-                className={`px-3 py-1 rounded-md transition-all inline-flex items-center space-x-1.5 ${
-                  drugFlagFilter === '2'
-                    ? 'bg-slate-800 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="แสดงรายการยาที่ยกเลิกหรือไม่ใช้ยาแล้ว (รหัส 2:ไม่ใช้ยา)"
-              >
-                <span className="w-2 h-2 rounded-full bg-slate-400 inline-block"></span>
-                <span>ไม่ใช้ยา (2:ไม่ใช้ยา)</span>
-              </button>
-              <button
-                onClick={() => setDrugFlagFilter('all')}
-                className={`px-3 py-1 rounded-md transition-all inline-flex items-center space-x-1.5 ${
-                  drugFlagFilter === 'all'
-                    ? 'bg-blue-600 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="แสดงทุกรายการยาในฐานข้อมูล JHCIS ทั้งหมด"
-              >
-                <Folder className="w-3.5 h-3.5 inline text-blue-300" />
-                <span>ทุกสถานะ ({summary.totalDrugs.toLocaleString()})</span>
-              </button>
-            </div>
-          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* 1. สถานะการใช้ยาใน JHCIS: Dropdown */}
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-700 flex items-center space-x-1 whitespace-nowrap">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                <span>สถานะการใช้ยาใน JHCIS:</span>
+              </span>
 
-          <div className="text-[11px] text-slate-500 hidden sm:block">
-            *ค่าเริ่มต้นแสดง <strong className="text-emerald-700">1:ใช้ยา</strong> เหมือนหน้าจอ JHCIS กำหนดรหัส TMT Code เพื่อความรวดเร็วและตรงงานจริง
-          </div>
-        </div>
+              <div className="relative" ref={flagDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFlagDropdownOpen(!isFlagDropdownOpen);
+                    setIsCategoryDropdownOpen(false);
+                  }}
+                  className={`inline-flex items-center justify-between space-x-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+                    isFlagDropdownOpen
+                      ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-white'
+                      : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 text-slate-800'
+                  }`}
+                  title="คลิกเพื่อเลือกสถานะการใช้ยาใน JHCIS"
+                >
+                  <div className="inline-flex items-center space-x-2">
+                    {drugFlagFilter === '1' && (
+                      <>
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
+                        <span className="font-bold text-emerald-950">มีใช้ยา (1:ใช้ยา)</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold">
+                          {summary.activeDrugs.toLocaleString()}
+                        </span>
+                      </>
+                    )}
+                    {drugFlagFilter === '2' && (
+                      <>
+                        <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
+                        <span className="font-bold text-slate-800">ไม่ใช้ยา (2:ไม่ใช้ยา)</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-mono text-[10px] font-bold">
+                          {summary.inactiveDrugs.toLocaleString()}
+                        </span>
+                      </>
+                    )}
+                    {drugFlagFilter === 'all' && (
+                      <>
+                        <Folder className="w-3.5 h-3.5 text-blue-500" />
+                        <span className="font-bold text-blue-900">ทุกสถานะ</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 font-mono text-[10px] font-bold">
+                          {summary.totalDrugs.toLocaleString()}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 ml-1 transition-transform duration-200 ${isFlagDropdownOpen ? 'rotate-180 text-emerald-600' : ''}`} />
+                </button>
 
-        {/* JHCIS Quick Category Pills */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-bold text-slate-600 mr-1 flex items-center space-x-1">
-            <Filter className="w-3.5 h-3.5 text-emerald-600" />
-            <span>กลุ่มเวชภัณฑ์:</span>
-          </span>
-          {jhcisCategories.map(cat => {
-            const Icon = cat.icon;
-            const isSelected = drugTypeFilter === cat.id;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setDrugTypeFilter(cat.id);
-                  setPage(1);
-                }}
-                className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs transition-all shadow-2xs font-semibold ${
-                  isSelected
-                    ? 'bg-slate-900 text-white ring-2 ring-slate-900/20 font-bold scale-[1.02]'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-400' : 'text-slate-500'}`} />
-                <span>{cat.label}</span>
-                {cat.count !== undefined && cat.count > 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                    isSelected ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'
-                  }`}>
-                    {cat.count}
-                  </span>
+                {isFlagDropdownOpen && (
+                  <div className="absolute left-0 mt-1.5 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-40 animate-in fade-in zoom-in-95">
+                    <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      เลือกสถานะการใช้งาน
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDrugFlagFilter('1');
+                        setIsFlagDropdownOpen(false);
+                        setPage(1);
+                      }}
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-emerald-50/70 transition-colors cursor-pointer ${
+                        drugFlagFilter === '1' ? 'bg-emerald-50 text-emerald-950 font-bold' : 'text-slate-700 font-medium'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
+                        <div>
+                          <div className="text-xs">มีใช้ยา (1:ใช้ยา)</div>
+                          <div className="text-[10px] text-slate-400 font-normal">เปิดใช้งานในระบบ JHCIS</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-[11px] font-mono px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                          {summary.activeDrugs.toLocaleString()}
+                        </span>
+                        {drugFlagFilter === '1' && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDrugFlagFilter('2');
+                        setIsFlagDropdownOpen(false);
+                        setPage(1);
+                      }}
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer ${
+                        drugFlagFilter === '2' ? 'bg-slate-100 text-slate-900 font-bold' : 'text-slate-700 font-medium'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
+                        <div>
+                          <div className="text-xs">ไม่ใช้ยา (2:ไม่ใช้ยา)</div>
+                          <div className="text-[10px] text-slate-400 font-normal">ยกเลิก/ไม่ใช้ยาแล้ว</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-[11px] font-mono px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-bold">
+                          {summary.inactiveDrugs.toLocaleString()}
+                        </span>
+                        {drugFlagFilter === '2' && <Check className="w-3.5 h-3.5 text-slate-700" />}
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDrugFlagFilter('all');
+                        setIsFlagDropdownOpen(false);
+                        setPage(1);
+                      }}
+                      className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-blue-50/70 transition-colors cursor-pointer ${
+                        drugFlagFilter === 'all' ? 'bg-blue-50 text-blue-950 font-bold' : 'text-slate-700 font-medium'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <Folder className="w-4 h-4 text-blue-500" />
+                        <div>
+                          <div className="text-xs">ทุกสถานะ (ทั้งหมด)</div>
+                          <div className="text-[10px] text-slate-400 font-normal">รวมทุกรายการในฐานข้อมูล</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-[11px] font-mono px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 font-bold">
+                          {summary.totalDrugs.toLocaleString()}
+                        </span>
+                        {drugFlagFilter === 'all' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                      </div>
+                    </button>
+                  </div>
                 )}
-              </button>
-            );
-          })}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden sm:block h-5 w-px bg-slate-200" />
+
+            {/* 2. กลุ่มเวชภัณฑ์: Multi-Select Dropdown with Checkboxes */}
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold text-slate-700 flex items-center space-x-1 whitespace-nowrap">
+                <Filter className="w-3.5 h-3.5 text-emerald-600" />
+                <span>กลุ่มเวชภัณฑ์:</span>
+              </span>
+
+              <div className="relative" ref={categoryDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCategoryDropdownOpen(!isCategoryDropdownOpen);
+                    setIsFlagDropdownOpen(false);
+                  }}
+                  className={`inline-flex items-center justify-between space-x-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shadow-2xs ${
+                    isCategoryDropdownOpen
+                      ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-white'
+                      : selectedCategories.length > 0
+                        ? 'border-slate-300 bg-white hover:border-emerald-400 text-slate-800'
+                        : 'border-slate-200 bg-slate-50 hover:bg-white text-slate-600'
+                  }`}
+                  title="คลิกเพื่อเลือกกลุ่มเวชภัณฑ์ (เลือกได้หลายกลุ่มพร้อมกัน)"
+                >
+                  <div className="inline-flex items-center space-x-1.5 max-w-[220px] sm:max-w-xs md:max-w-sm truncate">
+                    <span className="truncate font-bold text-slate-800">{categoryTriggerLabel}</span>
+                    <span className="shrink-0 px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold">
+                      {selectedCategoriesTotalCount.toLocaleString()}
+                    </span>
+                  </div>
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 ml-1 shrink-0 transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180 text-emerald-600' : ''}`} />
+                </button>
+
+                {isCategoryDropdownOpen && (
+                  <div className="absolute left-0 sm:left-auto sm:right-0 lg:left-0 mt-1.5 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2.5 z-40 animate-in fade-in zoom-in-95">
+                    
+                    {/* Header: Title and Quick Action Buttons */}
+                    <div className="px-3 pb-2 border-b border-slate-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-slate-800 flex items-center space-x-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>เลือกกลุ่มเวชภัณฑ์ (เลือกได้หลายกลุ่ม)</span>
+                        </span>
+                        <span className="text-[11px] font-medium text-slate-500">
+                          {selectedCategories.length} / {ALL_JHCIS_CATEGORIES.length} กลุ่ม
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleSelectAllCategories}
+                          className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                        >
+                          เลือกทั้งหมด
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSelectOnlyDrugs}
+                          className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-800 transition-colors cursor-pointer"
+                        >
+                          เฉพาะยา (01+10)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearCategories}
+                          className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors cursor-pointer"
+                        >
+                          ล้างค่า
+                        </button>
+                      </div>
+
+                      {/* Filter Search within dropdown */}
+                      <div className="relative mt-2">
+                        <Search className="w-3 h-3 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={categorySearchText}
+                          onChange={e => setCategorySearchText(e.target.value)}
+                          placeholder="ค้นหากลุ่มเวชภัณฑ์..."
+                          className="w-full pl-7 pr-6 py-1 rounded-lg text-xs bg-slate-50 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                        {categorySearchText && (
+                          <button
+                            type="button"
+                            onClick={() => setCategorySearchText('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Scrollable Checkbox List */}
+                    <div className="max-h-72 overflow-y-auto px-1.5 py-1.5 space-y-0.5">
+                      {filteredCategoryOptions.map(cat => {
+                        const Icon = cat.icon;
+                        const isChecked = selectedCategories.includes(cat.id);
+                        return (
+                          <label
+                            key={cat.id}
+                            className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl cursor-pointer transition-all ${
+                              isChecked
+                                ? 'bg-emerald-50/80 hover:bg-emerald-100/70'
+                                : 'hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2.5 min-w-0 pr-2">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleCategory(cat.id)}
+                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 cursor-pointer"
+                              />
+                              <div className={`p-1.5 rounded-lg shrink-0 ${
+                                isChecked ? 'bg-emerald-200/80 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                <Icon className="w-3.5 h-3.5" />
+                              </div>
+                              <span className={`text-xs truncate ${
+                                isChecked ? 'font-bold text-emerald-950' : 'font-medium text-slate-700'
+                              }`}>
+                                {cat.label}
+                              </span>
+                            </div>
+                            <span className={`text-[11px] font-mono px-2 py-0.5 rounded-full shrink-0 font-bold ${
+                              isChecked ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {(cat.count || 0).toLocaleString()}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-3 pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <div className="text-[11px] text-slate-500">
+                        รวม <strong className="text-slate-800 font-bold">{selectedCategoriesTotalCount.toLocaleString()}</strong> รายการ
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsCategoryDropdownOpen(false)}
+                        className="px-3 py-1 rounded-lg text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition-colors cursor-pointer"
+                      >
+                        ปิดหน้าต่าง
+                      </button>
+                    </div>
+
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          <div className="text-[11px] text-slate-500 hidden xl:flex items-center space-x-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>*ค่าเริ่มต้น <strong className="text-emerald-700 font-bold">1:ใช้ยา</strong> และ <strong className="text-emerald-700 font-bold">ยาแผนปัจจุบัน</strong> เหมือนหน้าจอ JHCIS</span>
+          </div>
+
         </div>
+
+        {/* Selected Category Chips (ถ้าเลือกเฉพาะบางกลุ่ม) */}
+        {selectedCategories.length > 0 && selectedCategories.length < ALL_JHCIS_CATEGORIES.length && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-100">
+            <span className="text-[11px] font-bold text-slate-500 mr-0.5">กลุ่มที่กำลังกรอง:</span>
+            {selectedCategories.map(catId => {
+              const cat = ALL_JHCIS_CATEGORIES.find(c => c.id === catId);
+              if (!cat) return null;
+              const Icon = cat.icon;
+              return (
+                <span
+                  key={catId}
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-medium"
+                >
+                  <Icon className="w-3 h-3 text-emerald-600" />
+                  <span>{cat.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(catId)}
+                    className="hover:bg-emerald-200 rounded-full p-0.5 transition-colors cursor-pointer ml-0.5"
+                    title={`ลบตัวกรอง ${cat.label}`}
+                  >
+                    <X className="w-3 h-3 text-emerald-700" />
+                  </button>
+                </span>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setSelectedCategories(['01'])}
+              className="text-[11px] text-slate-500 hover:text-emerald-700 underline ml-1 cursor-pointer font-medium"
+            >
+              รีเซ็ตเป็นยาแผนปัจจุบัน
+            </button>
+          </div>
+        )}
+
       </div>
 
       {/* Stock Health Status Cards */}
@@ -846,7 +1198,7 @@ export default function DashboardView({
             onClick={() => { 
               setSearch(''); 
               setStatusFilter('all'); 
-              setDrugTypeFilter('01'); 
+              setSelectedCategories(['01']); 
               setDrugFlagFilter('1'); 
               setSortBy('default');
               setSortOrder('asc');
