@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
-const { getAllJhcisDrugs } = require('./matcherService');
+const { getAllJhcisDrugs, scoreDrugClinicalMatch, parseStrength, parseDosageForm } = require('./matcherService');
 const { memoryStore, saveMappings, getPcuCode } = require('../config/db');
 const {
   saveStockCount, saveStockCountsBatch, getStockCounts, getStockCount,
@@ -369,9 +369,22 @@ async function importFromExcel(buffer, actor = 'เจ้าหน้าที�
 
       let drugcode = null;
 
-      // 1. ตรวจสอบ Alias เฉพาะ (เฉพาะกรณี fallback เริ่มต้น รพ.สต. 06020)
+      // 1. ตรวจสอบ Saved Mappings (ผูกเฉพาะตาม pcucode ของหน่วยบริการปัจจุบัน)
       const currentPcu = getPcuCode() || '';
-      if (currentPcu === '06020' || currentPcu === '') {
+      const savedMappings = (memoryStore && Array.isArray(memoryStore.drugMappings)) ? memoryStore.drugMappings : [];
+      const normRawName = rawName.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
+      const normWithStrength = `${rawName} ${rawStrength}`.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
+      const mapHit = savedMappings.find(m => {
+        if (m.pcucode && currentPcu && m.pcucode !== currentPcu) return false;
+        const mName = (m.hospitalDrugName || m.drugname || '').toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
+        return mName === normWithStrength || mName === normRawName;
+      });
+      if (mapHit && (mapHit.jhcisdrugcode || mapHit.matchedDrugCode)) {
+        drugcode = String(mapHit.jhcisdrugcode || mapHit.matchedDrugCode);
+      }
+
+      // 2. Fallback Seed สำหรับ รพ.สต. ท่ากว้าง (PCU 06020 เท่านั้น — ห้ามใช้ข้ามหน่วยบริการ)
+      if (!drugcode && currentPcu === '06020') {
         for (const [k, code] of Object.entries(HOSPITAL_06020_SEED_ALIASES)) {
           if (searchKey === k || searchKeyWithType === k || searchKey.includes(k) || searchKeyWithType.includes(k) || k.includes(searchKey)) {
             drugcode = code;
@@ -380,36 +393,16 @@ async function importFromExcel(buffer, actor = 'เจ้าหน้าที�
         }
       }
 
-      // 2. Intelligent search ในทะเบียนยา JHCIS
+      // 3. 4-Dimensional Clinical Drug Matcher (ชื่อยา + ขนาดยา mg/ml + ชนิดยา + ประเภทยา)
       if (!drugcode) {
-        const cleanName = rawName.toLowerCase().replace(/[\s()_]/g, '');
-        const sWords = rawStrength.toLowerCase().split(/[\s+/]+/).filter(w => w.length > 0 && !['mg', 'tab', 'cap', 'ml', 'g', 'x'].includes(w));
-        const firstWord = rawName.toLowerCase().split(' ')[0].replace(/[^a-z0-9\u0E00-\u0E7F]/gi, '');
+        const scoredCandidates = drugs.map(d => {
+          const evalRes = scoreDrugClinicalMatch({ rawName, rawStrength, rawType, rawCategory: category }, d);
+          return { drugcode: d.drugcode, score: evalRes.score, evalRes };
+        }).filter(c => c.score >= 50)
+          .sort((a, b) => b.score - a.score);
 
-        let candidates = drugs.filter(d => {
-          const dName = (d.drugname || '').toLowerCase().replace(/[\s()_]/g, '');
-          const dThai = (d.drugnamethai || '').toLowerCase().replace(/[\s()_]/g, '');
-          return dName.includes(cleanName) || dThai.includes(cleanName) || (firstWord.length >= 4 && (dName.includes(firstWord) || dThai.includes(firstWord)));
-        });
-
-        if (candidates.length > 1 && sWords.length > 0) {
-          const withS = candidates.filter(c => {
-            const cName = (c.drugname || '').toLowerCase();
-            return sWords.every(sw => cName.includes(sw));
-          });
-          if (withS.length > 0) candidates = withS;
-        }
-
-        if (candidates.length === 1) {
-          drugcode = candidates[0].drugcode;
-        } else if (candidates.length > 1) {
-          if (category.includes('เม็ด') || rawType === 'tab' || rawType === 'cap') {
-            const tabs = candidates.filter(c => (c.drugunit || '').includes('เม็ด') || (c.drugunit || '').includes('แคป'));
-            if (tabs.length === 1) drugcode = tabs[0].drugcode;
-          } else if (rawType === 'syr' || rawType === 'sus') {
-            const syrs = candidates.filter(c => (c.drugunit || '').includes('ขวด'));
-            if (syrs.length === 1) drugcode = syrs[0].drugcode;
-          }
+        if (scoredCandidates.length > 0 && (scoredCandidates[0].score >= 95 || scoredCandidates[0].evalRes?.status === 'EXACT')) {
+          drugcode = scoredCandidates[0].drugcode;
         }
       }
 
@@ -620,8 +613,8 @@ async function previewExcelInitialStock(bufferOrPath = null) {
       matchSource = 'saved_mapping';
     }
 
-    // 2. Fallback Seed for PCU 06020 ONLY (never used for other PCUs)
-    if (!mappedCode && (currentPcu === '06020' || currentPcu === '')) {
+    // 2. Fallback Seed for PCU 06020 ONLY (ห้ามใช้กับ รพ.สต. อื่นเด็ดขาด)
+    if (!mappedCode && currentPcu === '06020') {
       mappedCode = HOSPITAL_06020_SEED_ALIASES[baseKey] || HOSPITAL_06020_SEED_ALIASES[fullKey] || HOSPITAL_06020_SEED_ALIASES[nameKey];
       if (!mappedCode) {
         for (const [k, c] of Object.entries(HOSPITAL_06020_SEED_ALIASES)) {
@@ -636,83 +629,17 @@ async function previewExcelInitialStock(bufferOrPath = null) {
       }
     }
 
-    // 3. Multi-factor scoring against all JHCIS drugs with Clinical Abbreviation Expansion
-    const rawFirstWord = rawName.toLowerCase().split(' ')[0].replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-    const strengthNumbers = (rawStrength.match(/\d+(?:\.\d+)?/g) || []);
-    const isPercent = rawStrength.includes('%');
-
-    // Expand clinical abbreviations in rawName
-    const searchTerms = [normRawName];
-    const rawTokens = rawName.toLowerCase().split(/[\s()_/,+.-]+/);
-    for (const [abbr, expansions] of Object.entries(CLINICAL_ABBREVIATIONS)) {
-      if (rawTokens.includes(abbr) || rawName.toLowerCase().includes(abbr)) {
-        expansions.forEach(exp => {
-          const cleanExp = exp.replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-          if (cleanExp && !searchTerms.includes(cleanExp)) searchTerms.push(cleanExp);
-        });
-      }
-    }
-
+    // 3. Multi-factor 4-Dimensional Clinical Drug Matcher (ชื่อยา + ขนาดยา mg/ml + ชนิดยา + ประเภทยา)
     const candidates = [];
     drugs.forEach(d => {
-      let score = 0;
-      const dNorm = (d.drugname || '').toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-      const dGen = (d.druggenericname || '').toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-      const dThai = (d.drugnamethai || '').toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-      const dCode = String(d.drugcode);
+      const evalRes = scoreDrugClinicalMatch({ rawName, rawStrength, rawType, rawCategory }, d);
+      let score = evalRes.score;
 
-      if (mappedCode && dCode === String(mappedCode)) {
+      if (mappedCode && String(d.drugcode) === String(mappedCode)) {
         score += 150;
       }
 
-      // Name similarity against all search terms (including expanded abbreviations)
-      let nameMatched = false;
-      for (const term of searchTerms) {
-        if (!term) continue;
-        if (dNorm.includes(term) || dGen.includes(term)) {
-          score += 50;
-          nameMatched = true;
-          break;
-        } else if (term.includes(dNorm) && dNorm.length >= 4) {
-          score += 40;
-          nameMatched = true;
-          break;
-        }
-      }
-      if (rawFirstWord.length >= 3 && (dNorm.startsWith(rawFirstWord) || dGen.startsWith(rawFirstWord))) {
-        score += 35;
-      } else if (rawFirstWord.length >= 3 && (dNorm.includes(rawFirstWord) || dThai.includes(rawFirstWord))) {
-        score += 25;
-      }
-
-      if (score === 0) return;
-
-      // Strength matching
-      if (strengthNumbers.length > 0) {
-        let strengthMatched = false;
-        strengthNumbers.forEach(num => {
-          const regex = new RegExp(`(^|[^0-9.])${num.replace('.', '\\.')}([^0-9.]|$)`);
-          if (regex.test(d.drugname || '') || regex.test(d.druggenericname || '')) {
-            score += 35;
-            strengthMatched = true;
-          }
-        });
-        const dNumbers = ((d.drugname || '').match(/\d+(?:\.\d+)?/g) || []);
-        if (dNumbers.length > 0 && !strengthMatched) {
-          score -= 30; // Strong penalty if drug has different number
-        }
-      }
-
-      if (isPercent) {
-        if ((d.drugname || '').includes('%')) score += 20;
-        else score -= 20;
-      }
-
-      // Dosage form matching
-      const dUnit = (d.drugunit || '').toLowerCase();
-      if ((rawType === 'tab' || rawType === 'cap' || rawCategory.includes('เม็ด')) && (dUnit.includes('เม็ด') || dUnit.includes('แคป'))) score += 15;
-      if ((rawType === 'syr' || rawType === 'sus' || rawType === 'sol' || rawType === 'drop' || rawCategory.includes('น้ำ')) && (dUnit.includes('ขวด') || dUnit.includes('หลอด'))) score += 15;
-      if ((rawType === 'cre' || rawType === 'oin' || rawType === 'pas' || rawCategory.includes('ภายนอก')) && (dUnit.includes('ตลับ') || dUnit.includes('หลอด') || dUnit.includes('กระปุก'))) score += 15;
+      if (score <= 0) return;
 
       candidates.push({
         drugcode: d.drugcode,
@@ -721,17 +648,18 @@ async function previewExcelInitialStock(bufferOrPath = null) {
         drugunit: d.drugunit || 'หน่วย',
         unitpacking: d.unitpacking || '',
         costprice: Number(d.costprice) || 0,
-        score
+        score,
+        evalRes
       });
     });
 
     candidates.sort((a, b) => b.score - a.score);
     const topCandidates = candidates.slice(0, 6);
-    const topMatch = topCandidates.length > 0 && topCandidates[0].score >= 40 ? topCandidates[0] : null;
+    const topMatch = topCandidates.length > 0 && topCandidates[0].score >= 50 ? topCandidates[0] : null;
 
     let matchStatus = 'UNMATCHED';
     if (topMatch) {
-      if (topMatch.score >= 80 || mappedCode) {
+      if (topMatch.score >= 95 || mappedCode || topMatch.evalRes?.status === 'EXACT') {
         matchStatus = 'EXACT';
         exactMatches++;
       } else {

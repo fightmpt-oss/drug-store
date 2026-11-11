@@ -1,91 +1,116 @@
-const { memoryStore, getPool, isLive } = require('../config/db');
+const { memoryStore, getPool, isLive, getPcuCode } = require('../config/db');
 
-// Clinical drug aliases dictionary (ตัวย่อและชื่อพ้องทางการแพทย์/เภสัชกรรม)
-const COMMON_ALIASES = {
-  'cpm': 'chlorpheniramine',
-  'chlorphen': 'chlorpheniramine',
-  'mtv': 'multivitamin',
-  'asa': 'aspirin',
-  'dexa': 'dexamethasone',
-  'dimen': 'dimenhydrinate',
-  'amoxycillin': 'amoxicillin',
-  'frusemide': 'furosemide',
-  'hctz': 'hydrochlorothiazide',
-  'pcm': 'paracetamol',
-  'para': 'paracetamol',
-  'mtx': 'methotrexate',
-  'cloxa': 'cloxacillin',
-  'dicloxa': 'dicloxacillin',
-  'cotrimoxazole': 'bactrim',
-  'bactrim': 'cotrimoxazole',
-  'mometasone': 'elomet',
-  'salbutamol': 'ventolin',
-  'ventolin': 'salbutamol',
-  'berodual': 'ipratropium',
-  'ors': 'ors',
-  'nss': 'sodium chloride',
-  'cafergot': 'cafegot',
-  'cafegot': 'cafegot',
-  'ergotamine': 'cafegot'
+// Clinical drug expansions & synonyms (ครอบคลุมทั้งชื่อการค้า ชื่อสามัญทางยา และตัวย่อทางการแพทย์)
+const CLINICAL_EXPANSIONS = {
+  'cafergot': ['cafegot', 'ergotamine', 'caffeine', 'migana', 'avamigran'],
+  'cafegot': ['cafergot', 'ergotamine', 'caffeine', 'migana'],
+  'ergotamine': ['cafergot', 'cafegot', 'caffeine'],
+  'cpm': ['chlorpheniramine', 'chlorphen'],
+  'chlorphen': ['chlorpheniramine', 'cpm'],
+  'chlorpheniramine': ['cpm', 'chlorphen', 'chlopheniramine'],
+  'chlopheniramine': ['chlorpheniramine', 'cpm'],
+  'mtv': ['multivitamin', 'multi-vitamin'],
+  'multivitamin': ['mtv'],
+  'asa': ['aspirin', 'asprex'],
+  'aspirin': ['asa', 'asprex'],
+  'asprex': ['aspirin', 'asa'],
+  'dexa': ['dexamethasone'],
+  'dexamethasone': ['dexa'],
+  'dimen': ['dimenhydrinate'],
+  'dimenhydrinate': ['dimen'],
+  'amoxycillin': ['amoxicillin', 'amoxil'],
+  'amoxicillin': ['amoxycillin', 'amoxil'],
+  'frusemide': ['furosemide', 'lasix'],
+  'furosemide': ['frusemide', 'lasix'],
+  'lasix': ['furosemide', 'frusemide'],
+  'hctz': ['hydrochlorothiazide'],
+  'hydrochlorothiazide': ['hctz'],
+  'pcm': ['paracetamol', 'para', 'tylenol', 'sara'],
+  'para': ['paracetamol', 'pcm', 'tylenol', 'sara'],
+  'paracetamol': ['pcm', 'para', 'tylenol', 'sara'],
+  'mtx': ['methotrexate'],
+  'methotrexate': ['mtx'],
+  'cloxa': ['cloxacillin'],
+  'cloxacillin': ['cloxa'],
+  'dicloxa': ['dicloxacillin'],
+  'dicloxacillin': ['dicloxa'],
+  'cotrimoxazole': ['bactrim', 'trimethoprim', 'sulfamethoxazole'],
+  'bactrim': ['cotrimoxazole'],
+  'mometasone': ['elomet'],
+  'salbutamol': ['ventolin'],
+  'ventolin': ['salbutamol'],
+  'berodual': ['fenoterol', 'ipratropium'],
+  'ipratropium': ['berodual', 'fenoterol'],
+  'ors': ['oral rehydration salts', 'เกลือแร่'],
+  'nss': ['sodium chloride', 'normal saline'],
+  'sodium chloride': ['nss'],
+  'ta': ['triamcinolone', 'triamcinolone acetonide'],
+  'triamcinolone': ['ta'],
+  'clotrimazole': ['canesten'],
+  'canesten': ['clotrimazole'],
+  'gg': ['glyceryl guaiacolate', 'guaifenesin'],
+  'glyceryl guaiacolate': ['gg', 'guaifenesin'],
+  'folic': ['folic acid'],
+  'folic acid': ['folic'],
+  'vitamin bco': ['vitamin b complex', 'b complex', 'bco'],
+  'bco': ['vitamin b complex', 'vitamin bco'],
+  'vitamin b1-6-12': ['neurobion', 'b1-b6-b12'],
+  'vitamin c': ['ascorbic acid'],
+  'ascorbic acid': ['vitamin c'],
+  'wfi': ['water for injection', 'sterile water'],
+  'water for injection': ['wfi', 'sterile water'],
+  'd5': ['dextrose 5%', 'd-5-w', 'd-5-s'],
+  'hyoscine': ['buscopan', 'butylbromide', 'hyoscine-n-butyl']
 };
-
-const DOSAGE_FORMS = [
-  'tablet', 'tab', 'capsule', 'cap', 'injection', 'inj', 'syrup', 'syr',
-  'suspension', 'susp', 'sus', 'cream', 'ointment', 'oint', 'gel', 'drop', 'drops',
-  'solution', 'sol', 'spray', 'inhaler', 'nebule', 'neb', 'lotion', 'patch',
-  'suppository', 'supp', 'dry syr', 'eye drop', 'ear drop', 'powder', 'pow', 'respule'
-];
 
 function cleanString(str) {
   if (!str) return '';
-  return str.toLowerCase()
-    .replace(/[.,;:()\[\]{}\/\\+*\"\'\-_]/g, ' ')
+  return String(str)
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0E00-\u0E7F]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-function parseDrugFeatures(rawName) {
-  let cleaned = cleanString(rawName);
+function parseStrength(str) {
+  if (!str) return { numbers: [], isPercent: false, raw: '' };
+  const s = String(str).toLowerCase();
+  const isPercent = s.includes('%');
+  const numbers = (s.match(/\d+(?:\.\d+)?/g) || []).map(Number);
+  return { numbers, isPercent, raw: s };
+}
 
-  // สกัดขนาดยา / ความแรง เช่น 100 mg, 10 mg/ml, 500 mg, 0.5%
-  let strength = null;
-  const strengthRegex = /\b(\d+(?:\.\d+)?)\s*(mg|ml|mcg|gm|g|iu|%|meq|mmol|mg\s*ml|mg\s*5ml|mcg\s*dose)\b/i;
-  const sMatch = cleaned.match(strengthRegex);
-  if (sMatch) {
-    strength = sMatch[1] + sMatch[2].replace(/\s+/g, '');
-    cleaned = cleaned.replace(sMatch[0], ' ');
+function parseDosageForm(item) {
+  let text = '';
+  if (typeof item === 'string') {
+    text = item.toLowerCase();
+  } else if (item && typeof item === 'object') {
+    text = `${item.rawType || ''} ${item.dosageForm || ''} ${item.drugtype || ''} ${item.rawName || item.drugname || ''} ${item.drugunit || ''} ${item.unitpacking || ''} ${item.rawCategory || item.category || ''}`.toLowerCase();
   }
 
-  // สกัดรูปแบบยา (Dosage form)
-  let form = null;
-  for (const f of DOSAGE_FORMS) {
-    const fRegex = new RegExp('\\b' + f + '\\b', 'i');
-    if (fRegex.test(cleaned)) {
-      form = f.startsWith('tab') ? 'tab' :
-             f.startsWith('cap') ? 'cap' :
-             f.startsWith('inj') ? 'inj' :
-             f.startsWith('syr') ? 'syr' :
-             (f.startsWith('susp') || f === 'sus') ? 'susp' :
-             f.startsWith('cream') ? 'cream' :
-             f.startsWith('oint') ? 'oint' :
-             f.startsWith('drop') ? 'drop' :
-             (f === 'powder' || f === 'pow') ? 'powder' : f;
-      cleaned = cleaned.replace(fRegex, ' ');
-      break;
-    }
+  if (text.includes('inj') || text.includes('ฉีด') || text.includes('amp') || text.includes('vial') || text.includes('infusion')) return 'INJECTION';
+  if (text.includes('tab') || text.includes('เม็ด') || text.includes('coated tablet') || text.includes('film-coated')) return 'TABLET';
+  if (text.includes('cap') || text.includes('แคป') || text.includes('capsule')) return 'CAPSULE';
+  if (text.includes('syr') || text.includes('sus') || text.includes('น้ำ') || text.includes('elixir') || text.includes('mix') || text.includes('solution') || text.includes('liquid')) return 'SYRUP';
+  if (text.includes('cre') || text.includes('oin') || text.includes('gel') || text.includes('lot') || text.includes('pas') || text.includes('ครีม') || text.includes('ขี้ผึ้ง') || text.includes('เจล') || text.includes('ทา') || text.includes('ตลับ') || text.includes('ป้ายปาก')) return 'TOPICAL';
+  if (text.includes('drop') || text.includes('หยอด')) return 'DROPS';
+  if (text.includes('inh') || text.includes('neb') || text.includes('พ่น') || text.includes('spray') || text.includes('respule')) return 'INHALER';
+  if (text.includes('pow') || text.includes('sac') || text.includes('ผง') || text.includes('ซอง') || text.includes('ชาชง')) return 'POWDER';
+  if (text.includes('supp') || text.includes('เหน็บ')) return 'SUPPOSITORY';
+  return 'OTHER';
+}
+
+function parseCategory(item) {
+  let text = '';
+  if (typeof item === 'string') {
+    text = item.toLowerCase();
+  } else if (item && typeof item === 'object') {
+    text = `${item.rawCategory || item.category || ''} ${item.drugtype || ''} ${item.productcat || ''}`.toLowerCase();
   }
-
-  let tokens = cleaned.split(/\s+/).filter(Boolean);
-  // กรองคำสร้อยที่ไม่ใช่ชื่อยา
-  tokens = tokens.filter(t => !['ยา', 'เม็ด', 'ขวด', 'หลอด', 'ซอง', 'แผง', 'oral', 'pediatric', 'adult', 'sterile', 'usp', 'bp', 'เด็ก', 'ผู้ใหญ่', 'รสส้ม'].includes(t));
-
-  return {
-    raw: rawName,
-    core: tokens.join(' '),
-    tokens,
-    strength,
-    form
-  };
+  if (text.includes('สมุนไพร') || text === '25') return 'HERB';
+  if (text.includes('หัตถการ') || text === '02') return 'PROCEDURE';
+  if (text.includes('เวชภัณฑ์') || text.includes('วัสดุ') || text === '03' || text === '11') return 'SUPPLY';
+  return 'MODERN';
 }
 
 function levenshtein(a, b) {
@@ -104,95 +129,178 @@ function levenshtein(a, b) {
 }
 
 /**
- * เปรียบเทียบความเข้ากันได้ของชื่อยาตามหลักเภสัชกรรม (Clinical Drug Matcher)
- * - ตัวยาสำคัญ (Active Generic Drug Name) ต้องตรงกันก่อนเสมอ!
- * - ขนาดยาและรูปแบบยาเป็นตัวถ่วงน้ำหนัก
- * - ถ้าตัวยาคนละตัว (เช่น Metoprolol vs Atenolol) จะได้ 0.0 ทันที ห้ามจับคู่ข้ามตัวยา!
+ * 4-Dimensional Clinical Drug Matcher
+ * ตรวจสอบความเข้ากันได้ตาม 4 องค์ประกอบสำคัญ:
+ * 1. ชื่อยา (Active Generic Name, Trade Name, Thai Name, Clinical Synonyms)
+ * 2. ขนาดยา (Strength: mg, ml, mcg, gm, %, compound, ratio)
+ * 3. ชนิดยา / รูปแบบยา (Dosage Form: tab, cap, inj, syr, cre, etc.)
+ * 4. ประเภทยา / กลุ่มยา (Category: ยาแผนปัจจุบัน, ยาสมุนไพร, ยาเม็ด, ยาน้ำ, ยาฉีด, ยาทาภายนอก)
  */
-function compareClinicalDrugs(inputName, candidateDrug) {
-  const targetName = candidateDrug.drugname;
-  const f1 = parseDrugFeatures(inputName);
-  const f2 = parseDrugFeatures(targetName);
+function scoreDrugClinicalMatch(incoming, candidate) {
+  const incObj = typeof incoming === 'string' ? { rawName: incoming } : (incoming || {});
+  const candObj = candidate || {};
 
-  if (f1.tokens.length === 0 || f2.tokens.length === 0) return 0;
+  // 1. มิติชื่อยา (Name & Active Pharmaceutical Ingredient)
+  const incNameClean = cleanString(incObj.rawName || incObj.drugname || '');
+  const incTokens = incNameClean.split(' ').filter(t => t.length > 0 && !['ยา', 'เม็ด', 'ขวด', 'หลอด', 'ซอง', 'แผง', 'tab', 'cap', 'mg', 'ml'].includes(t));
+  
+  if (incTokens.length === 0) return { score: 0, status: 'UNMATCHED', reason: 'ไม่มีชื่อยา' };
 
-  // คำหลักที่เป็นชื่อตัวยา (First non-filler token)
-  const rootToken = f1.tokens[0];
-  const rootAlias = COMMON_ALIASES[rootToken] || rootToken;
-
-  // GATE CHECK: ตัวยาใน JHCIS ต้องมีชื่อตัวยาหลักตรงกันหรือเป็นคำพ้องเดียวกัน
-  let rootMatched = false;
-  for (const t2 of f2.tokens) {
-    const t2Alias = COMMON_ALIASES[t2] || t2;
-    // ตรงกันเป๊ะ หรือเป็นตัวย่อพ้อง
-    if (rootToken === t2 || (rootAlias.length >= 3 && t2Alias === rootAlias)) {
-      rootMatched = true;
-      break;
+  // ขยายคำพ้องและตัวย่อทางการแพทย์
+  const searchTerms = new Set();
+  incTokens.forEach(t => {
+    searchTerms.add(t);
+    if (CLINICAL_EXPANSIONS[t]) {
+      CLINICAL_EXPANSIONS[t].forEach(exp => searchTerms.add(exp));
     }
-    // Substring / คำนำหน้าสำหรับชื่อยาที่ยาวตั้งแต่ 4 ตัวอักษรขึ้นไป (เช่น amoxicillin vs amoxycillin)
-    if (rootToken.length >= 4 && t2.length >= 4) {
-      if (rootToken.includes(t2) || t2.includes(rootToken) || rootAlias.includes(t2Alias) || t2Alias.includes(rootAlias)) {
-        rootMatched = true;
-        break;
-      }
-      if (levenshtein(rootAlias, t2Alias) >= 0.8) {
-        rootMatched = true;
-        break;
-      }
-    }
-  }
-
-  // ตรวจเทียบชื่อภาษาไทยใน cdrugnamethai ด้วย
-  if (!rootMatched && candidateDrug.drugnamethai) {
-    const thClean = cleanString(candidateDrug.drugnamethai);
-    if (thClean.includes(rootToken) || thClean.includes(rootAlias)) {
-      rootMatched = true;
-    }
-  }
-
-  // ⚠️ CRITICAL SAFETY GATE: ถ้าชื่อตัวยาหลักไม่ตรงกัน = ปฏิเสธทันที (Score = 0)
-  // ป้องกันเด็ดขาดไม่ให้ Metoprolol จับคู่กับ Atenolol หรือ Hyoscine จับคู่กับ Domperidone
-  if (!rootMatched) {
-    return 0;
-  }
-
-  // คำนวณความครอบคลุมของคำในชื่อยา
-  const matchedTokens = f1.tokens.filter(t => {
-    const ta = COMMON_ALIASES[t] || t;
-    return f2.tokens.some(t2 => {
-      const t2a = COMMON_ALIASES[t2] || t2;
-      return t === t2 || (ta.length >= 3 && ta === t2a) || (t.length >= 4 && t2.length >= 4 && (t.startsWith(t2) || t2.startsWith(t)));
-    });
   });
-  const coreScore = matchedTokens.length / f1.tokens.length;
 
-  // ตรวจขนาดยา (Strength)
-  let strengthScore = 0.85; // ค่าเริ่มต้นหากฝ่ายใดฝ่ายหนึ่งไม่ระบุ
-  if (f1.strength && f2.strength) {
-    if (f1.strength === f2.strength) {
-      strengthScore = 1.0;
+  const candNameClean = cleanString(candObj.drugname || '');
+  const candGenClean = cleanString(candObj.druggenericname || '');
+  const candThaiClean = cleanString(candObj.drugnamethai || '');
+  const candCombined = `${candNameClean} ${candGenClean} ${candThaiClean}`.trim();
+
+  let nameScore = 0;
+  let matchedTokenCount = 0;
+
+  for (const term of searchTerms) {
+    if (term.length < 3) continue;
+    if (candCombined.includes(term)) {
+      nameScore += 50;
+      matchedTokenCount++;
     } else {
-      strengthScore = 0.25; // ขนาดยาไม่ตรงกัน (เช่น 50 mg vs 100 mg) -> ตัดคะแนนหนัก
+      // Fuzzy Levenshtein match (ตรวจจับตัวสะกดผิด เช่น Cafergot vs Cafegot)
+      const candWords = candCombined.split(' ');
+      for (const cw of candWords) {
+        if (cw.length >= 4 && term.length >= 4 && levenshtein(term, cw) >= 0.82) {
+          nameScore += 45;
+          matchedTokenCount++;
+          break;
+        }
+      }
     }
   }
 
-  // ตรวจรูปแบบยา (Form)
-  let formScore = 0.85;
-  if (f1.form && f2.form) {
-    if (f1.form === f2.form) {
-      formScore = 1.0;
+  // ⚠️ CRITICAL SAFETY GATE: ตัวยาสำคัญต้องตรงกันอย่างน้อย 1 ตัวยา ห้ามจับคู่ข้ามตัวยาเด็ดขาด!
+  if (nameScore === 0) {
+    return { score: 0, status: 'UNMATCHED', reason: 'ตัวยาสำคัญไม่ตรงกัน (Active ingredient mismatch)' };
+  }
+
+  // โบนัสถ้าตรงทั้งตัวยาหลักและตัวยารอง (เช่น Ergotamine + Caffeine)
+  if (matchedTokenCount >= 2) {
+    nameScore += 25;
+  }
+
+  // 2. มิติขนาดยา (Strength: mg, ml, %, compound)
+  const incStr = parseStrength(`${incObj.rawStrength || ''} ${incObj.rawName || ''} ${incObj.drugname || ''}`);
+  const candStr = parseStrength(`${candObj.drugname || ''} ${candObj.druggenericname || ''} ${candObj.unitpacking || ''}`);
+  
+  let strengthScore = 0;
+  if (incStr.numbers.length > 0 && candStr.numbers.length > 0) {
+    const allIncMatch = incStr.numbers.every(n => candStr.numbers.includes(n));
+    if (allIncMatch) {
+      strengthScore += 40; // ขนาดยาตรงกันเป๊ะ
     } else {
-      formScore = 0.25; // รูปแบบยาไม่ตรงกัน (เช่น ยาเม็ด vs ยาน้ำ/ยาฉีด) -> ตัดคะแนนหนัก
+      // ⚠️ ขนาดยาขัดแย้งกันอย่างชัดเจน (เช่น 5 mg vs 10 mg หรือ 500 mg vs 250 mg) -> ตัดคะแนนรุนแรง!
+      strengthScore -= 60;
+    }
+  }
+  if (incStr.isPercent) {
+    if (candStr.isPercent) strengthScore += 20;
+    else strengthScore -= 40;
+  }
+
+  // 3. มิติชนิดยา / รูปแบบยา (Dosage Form: tab, cap, inj, syr, cre, etc.)
+  const incForm = parseDosageForm(incObj);
+  const candForm = parseDosageForm(candObj);
+  
+  let formScore = 0;
+  if (incForm !== 'OTHER' && candForm !== 'OTHER') {
+    if (incForm === candForm) {
+      formScore += 30; // รูปแบบยาตรงกันเป๊ะ
+    } else if ((incForm === 'TABLET' && candForm === 'CAPSULE') || (incForm === 'CAPSULE' && candForm === 'TABLET')) {
+      formScore += 10; // อนุโลมยาเม็ดกับแคปซูล (ยากินชนิดแข็ง)
+    } else {
+      // ⚠️ รูปแบบยาขัดแย้งกันรุนแรง (เช่น ยาเม็ด vs ยาฉีด หรือ ยาน้ำ vs ยาทาภายนอก) -> ตัดคะแนนหนักมาก!
+      formScore -= 70;
     }
   }
 
-  let total = (coreScore * 0.6) + (strengthScore * 0.3) + (formScore * 0.1);
+  // 4. มิติประเภทยา / กลุ่มยา (Category: ยาเม็ด, ยาน้ำ, ยาฉีด, ยาทาภายนอก, สมุนไพร)
+  const incCat = parseCategory(incObj);
+  const candCat = parseCategory(candObj);
 
-  // ถ้าขนาดยาไม่ตรงกัน ให้คะแนนไม่เกิน 65% (เป็นได้แค่ข้อเสนอแนะ SUGGESTED ห้าม auto-match)
-  if (strengthScore <= 0.25) {
-    total = Math.min(total, 0.65);
+  let catScore = 0;
+  if (incCat === candCat) {
+    catScore += 20;
+  } else if ((incCat === 'HERB' && candCat !== 'HERB') || (incCat !== 'HERB' && candCat === 'HERB')) {
+    catScore -= 40; // ห้ามจับคู่ยาสมุนไพรกับยาแผนปัจจุบันปะปนกัน
   }
-  return total;
+
+  // โบนัสเสริมจากคอลัมน์ประเภทยาภาษาไทย
+  if (incObj.rawCategory) {
+    const rawCat = incObj.rawCategory;
+    if (rawCat.includes('เม็ด') && candForm === 'TABLET') catScore += 15;
+    if (rawCat.includes('น้ำ') && candForm === 'SYRUP') catScore += 15;
+    if (rawCat.includes('ฉีด') && candForm === 'INJECTION') catScore += 15;
+    if (rawCat.includes('ภายนอก') && candForm === 'TOPICAL') catScore += 15;
+  }
+
+  // ⚠️ CRITICAL SAFETY GATES ON CONFLICTS:
+  // 1. ถ้าชนิดยา/รูปแบบยาขัดแย้งกันรุนแรง (เช่น ยาเม็ด vs ยาฉีด หรือ ยาน้ำ vs ยาทาภายนอก) -> ปฏิเสธเด็ดขาด ห้ามจับคู่ข้ามรูปแบบยา!
+  if (formScore <= -50) {
+    return {
+      score: 0,
+      status: 'UNMATCHED',
+      reason: `ชนิด/รูปแบบยาขัดแย้งกันอย่างสิ้นเชิง (${incForm} vs ${candForm})`,
+      nameScore,
+      strengthScore,
+      formScore,
+      catScore,
+      incForm,
+      candForm
+    };
+  }
+
+  // 2. ถ้าขนาดยาขัดแย้งกันชัดเจน (เช่น 5 mg vs 10 mg หรือ 500 mg vs 250 mg) -> ปฏิเสธ ห้าม auto-match ข้ามขนาดยาเด็ดขาด!
+  if (strengthScore <= -50) {
+    return {
+      score: 30,
+      status: 'UNMATCHED',
+      reason: 'ขนาดยาไม่ตรงกัน (Strength mismatch)',
+      nameScore,
+      strengthScore,
+      formScore,
+      catScore,
+      incForm,
+      candForm
+    };
+  }
+
+  const totalScore = nameScore + strengthScore + formScore + catScore;
+  let status = 'UNMATCHED';
+  if (totalScore >= 95) {
+    status = 'EXACT';
+  } else if (totalScore >= 55) {
+    status = 'SUGGESTED';
+  }
+
+  return {
+    score: totalScore,
+    status,
+    nameScore,
+    strengthScore,
+    formScore,
+    catScore,
+    incForm,
+    candForm
+  };
+}
+
+function compareClinicalDrugs(inputName, candidateDrug) {
+  const result = scoreDrugClinicalMatch(inputName, candidateDrug);
+  if (result.score <= 0) return 0;
+  return Math.min(1.0, Math.round((result.score / 150) * 100) / 100);
 }
 
 // Get all real JHCIS pharmacy items from Live DB or Memory Store (ตัดหัตถการและอุปกรณ์ผ่าตัดออก)
@@ -204,6 +312,7 @@ async function getAllJhcisDrugs() {
       const [rows] = await pool.query(`
         SELECT c.drugcode, 
                c.drugname, 
+               c.druggenericname,
                c.drugnamethai,
                c.drugtype, 
                c.drugtypesub,
@@ -246,6 +355,7 @@ async function getAllJhcisDrugs() {
 async function matchExcelItems(parsedItems) {
   const jhcisDrugs = await getAllJhcisDrugs();
   const mappings = memoryStore.drugMappings || [];
+  const currentPcu = getPcuCode() || '';
 
   return parsedItems.map(item => {
     let matchedDrug = null;
@@ -257,7 +367,7 @@ async function matchExcelItems(parsedItems) {
     const tmt24 = (item.tmtid || '').trim();
     const hosCode = (item.hosdrugcode || '').trim();
 
-    // 1. Check TMT 24 digits (Highest priority) — รหัสมาตรฐาน 24 หลัก ตรงกันเป๊ะ
+    // 1. Check TMT 24 digits (Universal across all hospitals) — รหัสมาตรฐาน 24 หลัก ตรงกันเป๊ะ
     if (tmt24 && tmt24.length >= 6) {
       matchedDrug = jhcisDrugs.find(d => {
         const drugDid = (d.didstandard || d.tmtid || '').toString().replace(/[^0-9]/g, '').trim();
@@ -271,23 +381,17 @@ async function matchExcelItems(parsedItems) {
       }
     }
 
-function normalizeDrugKey(str) {
-  if (!str) return '';
-  return String(str)
-    .toLowerCase()
-    .replace(/[^a-z0-9ก-๙]/g, '')
-    .trim();
-}
-
-    // 2. Check saved hospital code or drug name mapping (Hospital Alias Memory)
+    // 2. Check saved hospital code or drug name mapping (Scoped strictly to current PCU)
     if (!matchedDrug) {
       const rawItemName = (item.drugname || '').trim();
-      const normItemName = normalizeDrugKey(rawItemName);
+      const normItemName = cleanString(rawItemName).replace(/\s+/g, '');
       const normHosCode = hosCode.toLowerCase();
 
       const savedMap = mappings.find(m => {
+        // กรองเฉพาะหน่วยบริการปัจจุบัน ห้ามใช้รหัสข้ามหน่วยบริการ
+        if (m.pcucode && currentPcu && m.pcucode !== currentPcu) return false;
         if (normHosCode && m.hosdrugcode && m.hosdrugcode.toLowerCase() === normHosCode) return true;
-        const mNorm = normalizeDrugKey(m.hospitalDrugName || m.drugname);
+        const mNorm = cleanString(m.hospitalDrugName || m.drugname || '').replace(/\s+/g, '');
         if (normItemName && mNorm && mNorm === normItemName) return true;
         return false;
       });
@@ -314,26 +418,28 @@ function normalizeDrugKey(str) {
       }
     }
 
-    // 4. Clinical Drug Matcher (ตรวจสอบตัวยาสำคัญ + ขนาดยา + รูปแบบยา)
+    // 4. 4-Dimensional Clinical Drug Matcher (ชื่อยา + ขนาดยา mg/ml + ชนิดยา + ประเภทยา)
     if (!matchedDrug && item.drugname) {
-      const scored = jhcisDrugs.map(d => ({
-        drug: d,
-        score: compareClinicalDrugs(item.drugname, d)
-      })).filter(s => s.score >= 0.50)
+      const scored = jhcisDrugs.map(d => {
+        const evalResult = scoreDrugClinicalMatch(item, d);
+        return {
+          drug: d,
+          evalResult,
+          score: evalResult.score
+        };
+      }).filter(s => s.score >= 50)
         .sort((a, b) => b.score - a.score);
 
       if (scored.length > 0) {
         const top = scored[0];
-        const pct = Math.round(top.score * 100);
+        const pct = Math.min(100, Math.round((top.score / 150) * 100));
 
-        // ถ้าตัวยาและขนาดยาตรงกันชัดเจน (>= 85%) ให้จัดเป็น MATCHED
-        if (pct >= 85) {
+        if (top.evalResult.status === 'EXACT') {
           matchedDrug = top.drug;
           matchStatus = 'MATCHED';
-          matchType = 'CLINICAL_MATCH (ชื่อตัวยาและขนาดยาตรงกัน)';
-          confidence = pct;
+          matchType = 'CLINICAL_MATCH (ชื่อยา ขนาดยา ชนิดยา และประเภทยา ตรงกัน)';
+          confidence = Math.max(85, pct);
         } else {
-          // ถ้าใกล้เคียง (50-84%) จัดเป็น SUGGESTED — ห้าม auto-fill รหัสยา ให้คนตรวจยืนยันก่อนเสมอ!
           matchStatus = 'SUGGESTED';
           matchType = 'SUGGESTIONS (ตัวยาใกล้เคียง — โปรดตรวจยืนยัน)';
           confidence = pct;
@@ -342,7 +448,7 @@ function normalizeDrugKey(str) {
         suggestions = scored.slice(0, 3).map(s => ({
           drugcode: s.drug.drugcode,
           drugname: s.drug.drugname,
-          score: Math.round(s.score * 100)
+          score: Math.min(100, Math.round((s.score / 150) * 100))
         }));
       }
     }
@@ -364,5 +470,9 @@ function normalizeDrugKey(str) {
 module.exports = {
   matchExcelItems,
   getAllJhcisDrugs,
-  compareClinicalDrugs
+  compareClinicalDrugs,
+  scoreDrugClinicalMatch,
+  parseStrength,
+  parseDosageForm,
+  parseCategory
 };
