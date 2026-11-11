@@ -369,7 +369,7 @@ async function importFromExcel(buffer, actor = 'เจ้าหน้าที�
 
       let drugcode = null;
 
-      // 1. ตรวจสอบ Saved Mappings (ผูกเฉพาะตาม pcucode ของหน่วยบริการปัจจุบัน)
+      // 1. ตรวจสอบ Saved Mappings (ผูกเฉพาะตาม pcucode ของหน่วยบริการปัจจุบัน และต้องเช็คความแรงด้วย)
       const currentPcu = getPcuCode() || '';
       const savedMappings = (memoryStore && Array.isArray(memoryStore.drugMappings)) ? memoryStore.drugMappings : [];
       const normRawName = rawName.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
@@ -377,7 +377,16 @@ async function importFromExcel(buffer, actor = 'เจ้าหน้าที�
       const mapHit = savedMappings.find(m => {
         if (m.pcucode && currentPcu && m.pcucode !== currentPcu) return false;
         const mName = (m.hospitalDrugName || m.drugname || '').toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-        return mName === normWithStrength || mName === normRawName;
+        if (mName === normWithStrength) return true;
+        if (mName === normRawName) {
+          const targetDrug = drugs.find(d => String(d.drugcode) === String(m.jhcisdrugcode || m.matchedDrugCode));
+          if (targetDrug) {
+            const evalRes = scoreDrugClinicalMatch({ rawName, rawStrength, rawType, rawCategory: category }, targetDrug);
+            if (evalRes.strengthScore < 0) return false; // ขนาดยาไม่ตรงกัน ห้ามใช้ mapping นี้เด็ดขาด!
+            return true;
+          }
+        }
+        return false;
       });
       if (mapHit && (mapHit.jhcisdrugcode || mapHit.matchedDrugCode)) {
         drugcode = String(mapHit.jhcisdrugcode || mapHit.matchedDrugCode);
@@ -606,7 +615,16 @@ async function previewExcelInitialStock(bufferOrPath = null) {
     const mapHit = savedMappings.find(m => {
       if (m.pcucode && currentPcu && m.pcucode !== currentPcu) return false;
       const mName = (m.hospitalDrugName || m.drugname || '').toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-      return mName === normWithStrength || mName === normRawName;
+      if (mName === normWithStrength) return true;
+      if (mName === normRawName) {
+        const targetDrug = drugs.find(d => String(d.drugcode) === String(m.jhcisdrugcode || m.matchedDrugCode));
+        if (targetDrug) {
+          const evalRes = scoreDrugClinicalMatch({ rawName, rawStrength, rawType, rawCategory }, targetDrug);
+          if (evalRes.strengthScore < 0) return false; // ขนาดยาขัดแย้งกัน ห้ามใช้ mapping นี้เด็ดขาด!
+          return true;
+        }
+      }
+      return false;
     });
     if (mapHit && (mapHit.jhcisdrugcode || mapHit.matchedDrugCode)) {
       mappedCode = String(mapHit.jhcisdrugcode || mapHit.matchedDrugCode);
@@ -635,8 +653,11 @@ async function previewExcelInitialStock(bufferOrPath = null) {
       const evalRes = scoreDrugClinicalMatch({ rawName, rawStrength, rawType, rawCategory }, d);
       let score = evalRes.score;
 
+      // ⚠️ กฎความปลอดภัยสำคัญ: ให้คะแนนพิเศษเฉพาะกรณีที่ขนาดยาและรูปแบบยาไม่ขัดแย้งกันเท่านั้น!
       if (mappedCode && String(d.drugcode) === String(mappedCode)) {
-        score += 150;
+        if (evalRes.strengthScore >= 0 && evalRes.formScore >= 0) {
+          score += 150;
+        }
       }
 
       if (score <= 0) return;
@@ -659,7 +680,10 @@ async function previewExcelInitialStock(bufferOrPath = null) {
 
     let matchStatus = 'UNMATCHED';
     if (topMatch) {
-      if (topMatch.score >= 95 || mappedCode || topMatch.evalRes?.status === 'EXACT') {
+      // ⚠️ ห้ามเป็น EXACT หากขนาดยาหรือรูปแบบยาขัดแย้งกัน
+      const hasStrengthMismatch = topMatch.evalRes?.strengthScore < 0;
+      const hasFormMismatch = topMatch.evalRes?.formScore < 0;
+      if (!hasStrengthMismatch && !hasFormMismatch && (topMatch.score >= 95 || (mappedCode && topMatch.evalRes?.strengthScore >= 0) || topMatch.evalRes?.status === 'EXACT')) {
         matchStatus = 'EXACT';
         exactMatches++;
       } else {
@@ -787,7 +811,10 @@ async function commitExcelInitialStock(items, options = {}, actor = 'เจ้�
 
     // 1. Save mappings if requested and rawName is provided (จดจำการจับคู่เสมอ ไม่ว่าจะมียอดหรือยอดคงเหลือเป็น 0)
     if (shouldSaveMappings && it.rawName) {
-      const cleanRawName = String(it.rawName).trim();
+      // รวมขนาดยาเข้าไปในชื่อเสมอหากมี เพื่อป้องกันยาชื่อเดียวกันคนละขนาดปนกัน
+      const cleanRawName = it.rawStrength && !String(it.rawName).toLowerCase().includes(String(it.rawStrength).toLowerCase())
+        ? `${String(it.rawName).trim()} ${String(it.rawStrength).trim()}`.trim()
+        : String(it.rawName).trim();
       const normRaw = cleanRawName.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
       const currentPcu = getPcuCode() || '';
       let existing = (memoryStore.drugMappings || []).find(m => {

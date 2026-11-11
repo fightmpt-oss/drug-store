@@ -32,20 +32,52 @@
     "updatedAt": "2026-11-11T07:20:07.189Z"
   },
   {
-    "id": "map_1794378133814_s1hms",
-    "hospitalDrugName": "Aspirin",
+    "id": "map_aspirin_81mg_662",
+    "pcucode": "06020",
+    "hospitalDrugName": "Aspirin 81 mg",
+    "drugname": "Aspirin 81 mg",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "662",
+    "jhcisdrugname": "ASPIRIN TAB 81 MG",
+    "matchedDrugCode": "662",
+    "matchedDrugName": "ASPIRIN TAB 81 MG",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
+  },
+  {
+    "id": "map_aspirin_300mg_8",
+    "pcucode": "06020",
+    "hospitalDrugName": "Aspirin 300 mg",
+    "drugname": "Aspirin 300 mg",
     "hosdrugcode": "",
     "jhcisdrugcode": "8",
     "jhcisdrugname": "ASPIRIN TAB 300 MG ",
-    "updatedAt": "2026-11-11T07:20:07.189Z"
+    "matchedDrugCode": "8",
+    "matchedDrugName": "ASPIRIN TAB 300 MG ",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
   },
   {
-    "id": "map_1794378133814_f1bfa",
-    "hospitalDrugName": "Atenolol",
+    "id": "map_atenolol_50mg_993",
+    "pcucode": "06020",
+    "hospitalDrugName": "Atenolol 50 mg",
+    "drugname": "Atenolol 50 mg",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "993",
+    "jhcisdrugname": "ATENOLOL TAB 50 MG",
+    "matchedDrugCode": "993",
+    "matchedDrugName": "ATENOLOL TAB 50 MG",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
+  },
+  {
+    "id": "map_atenolol_100mg_126",
+    "pcucode": "06020",
+    "hospitalDrugName": "Atenolol 100 mg",
+    "drugname": "Atenolol 100 mg",
     "hosdrugcode": "",
     "jhcisdrugcode": "126",
     "jhcisdrugname": "ATENOLOL TAB 100 MG",
-    "updatedAt": "2026-11-11T07:20:07.189Z"
+    "matchedDrugCode": "126",
+    "matchedDrugName": "ATENOLOL TAB 100 MG",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
   },
   {
     "id": "map_1794378133814_97k4u",
@@ -136,12 +168,28 @@
     "updatedAt": "2026-11-11T07:20:07.189Z"
   },
   {
-    "id": "map_1794378133814_guecf",
-    "hospitalDrugName": "Enalapril",
+    "id": "map_enalapril_5mg_819",
+    "pcucode": "06020",
+    "hospitalDrugName": "Enalapril 5 mg",
+    "drugname": "Enalapril 5 mg",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "819",
+    "jhcisdrugname": "ENALAPRIL 5 MG",
+    "matchedDrugCode": "819",
+    "matchedDrugName": "ENALAPRIL 5 MG",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
+  },
+  {
+    "id": "map_enalapril_20mg_94",
+    "pcucode": "06020",
+    "hospitalDrugName": "Enalapril 20 mg",
+    "drugname": "Enalapril 20 mg",
     "hosdrugcode": "",
     "jhcisdrugcode": "94",
     "jhcisdrugname": "ENALAPRIL 20 MG ",
-    "updatedAt": "2026-11-11T07:20:07.189Z"
+    "matchedDrugCode": "94",
+    "matchedDrugName": "ENALAPRIL 20 MG ",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
   },
   {
     "id": "map_1794378133814_y54d9",
@@ -304,12 +352,40 @@
     "updatedAt": "2026-11-11T07:20:07.189Z"
   },
   {
-    "id": "map_1794378133817_r4y47",
-    "hospitalDrugName": "Paracetamol",
+    "id": "map_paracetamol_500mg_422",
+    "pcucode": "06020",
+    "hospitalDrugName": "Paracetamol 500 mg",
+    "drugname": "Paracetamol 500 mg",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "422",
+    "jhcisdrugname": "PARACETAMOL TAB 500 MG",
+    "matchedDrugCode": "422",
+    "matchedDrugName": "PARACETAMOL TAB 500 MG",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
+  },
+  {
+    "id": "map_paracetamol_325mg_421",
+    "pcucode": "06020",
+    "hospitalDrugName": "Paracetamol 325 mg",
+    "drugname": "Paracetamol 325 mg",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "421",
+    "jhcisdrugname": "PARACETAMOL TAB 325 MG",
+    "matchedDrugCode": "421",
+    "matchedDrugName": "PARACETAMOL TAB 325 MG",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
+  },
+  {
+    "id": "map_paracetamol_syr_419",
+    "pcucode": "06020",
+    "hospitalDrugName": "Paracetamol 60 ml",
+    "drugname": "Paracetamol 60 ml",
     "hosdrugcode": "",
     "jhcisdrugcode": "419",
     "jhcisdrugname": "PARACETAMOL SYR 120 MG",
-    "updatedAt": "2026-11-11T07:20:07.191Z"
+    "matchedDrugCode": "419",
+    "matchedDrugName": "PARACETAMOL SYR 120 MG",
+    "updatedAt": "2026-11-11T21:00:00.000Z"
   },
   {
     "id": "map_1794378133817_wzaje",
