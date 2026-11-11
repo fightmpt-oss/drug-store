@@ -637,16 +637,16 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* JHCIS Classification & Filter Bar (รวมตัวกรองทั้งหมด: รอบบัญชี, สถานะการใช้ยา, กลุ่มเวชภัณฑ์ และปุ่มด่วน) */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
-        <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3">
+      {/* JHCIS Classification & Filter Bar (2-Row Modern Executive Layout) */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+        
+        {/* ROW 1: รอบบัญชี / ช่วงเวลา (ซ้าย) + ปุ่มปฏิบัติการคลังยา (ขวา) */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
           
-          {/* กลุ่มตัวกรองหลัก: รอบบัญชี + สถานะการใช้ยา + กลุ่มเวชภัณฑ์ */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            
-            {/* 1. รอบบัญชี / ช่วงเวลา (ย้ายมาไว้ในกล่องเดียวกับสถานะการใช้ยาและกลุ่มเวชภัณฑ์) */}
-            <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs">
-              <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          {/* ซ้าย: รอบบัญชี & ช่วงเวลา */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex items-center space-x-1.5 bg-slate-50 hover:bg-slate-100/70 px-2.5 py-1.5 rounded-xl border border-slate-200/90 shadow-2xs transition-colors">
+              <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
               <span className="text-xs font-bold text-slate-700 whitespace-nowrap">รอบบัญชี:</span>
               <select
                 value={currentPreset}
@@ -655,7 +655,7 @@ export default function DashboardView({
                     setPresetRange(e.target.value);
                   }
                 }}
-                className="text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 focus:outline-emerald-500 cursor-pointer shadow-2xs"
+                className="text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2.5 py-1 focus:outline-emerald-500 cursor-pointer shadow-2xs"
                 title="เลือกรอบปีงบประมาณหรือช่วงเวลาสำหรับคำนวณยอดยกมา รับเข้า จ่ายออก และคงเหลือ"
               >
                 <option value="fy_current">{currentFiscalYear().label} (1 ต.ค. 69 - 30 ก.ย. 70)</option>
@@ -671,7 +671,7 @@ export default function DashboardView({
                   type="date"
                   value={dateRange.startDate}
                   onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                  className="text-xs border border-slate-200 rounded-md px-1.5 py-0.5 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs"
+                  className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs"
                   title="วันที่เริ่มต้นรอบบัญชี (สำหรับคำนวณยอดยกมา)"
                 />
                 <span className="text-xs text-slate-400 font-medium">-</span>
@@ -679,19 +679,66 @@ export default function DashboardView({
                   type="date"
                   value={dateRange.endDate}
                   onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                  className="text-xs border border-slate-200 rounded-md px-1.5 py-0.5 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs"
+                  className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs"
                   title="วันที่สิ้นสุดรอบบัญชี (สำหรับคำนวณยอดคงเหลือสิ้นงวด)"
                 />
               </div>
             </div>
+          </div>
 
-            {/* Divider */}
-            <div className="hidden xl:block h-5 w-px bg-slate-200" />
+          {/* ขวา: Quick Action Buttons (ตรวจนับสต็อกยกมา, + นำเข้า Excel รับยา, เบิกยาคลังใน QR) */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onNavigateToCount && (
+              <button
+                type="button"
+                onClick={onNavigateToCount}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100/90 text-teal-900 border border-teal-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
+                title="ไปที่หน้าบันทึกตรวจนับสต็อกยกมาเริ่มต้นรอบใหม่"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5 text-teal-600" />
+                <span>ตรวจนับสต็อกยกมา</span>
+                {summary?.countedDrugs > 0 && (
+                  <span className="bg-teal-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
+                    {summary.countedDrugs}
+                  </span>
+                )}
+              </button>
+            )}
 
-            {/* 2. สถานะการใช้ยาใน JHCIS: Dropdown */}
+            <button
+              type="button"
+              onClick={onNavigateToImport}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer hover:shadow-sm active:scale-95"
+              title="ไปที่หน้านำเข้าใบรับยาจาก รพ.แม่ข่าย (Excel / PDF)"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>+ นำเข้า Excel รับยา</span>
+            </button>
+
+            {onOpenSubstockQr && (
+              <button
+                type="button"
+                onClick={() => onOpenSubstockQr(null)}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100/90 text-indigo-900 border border-indigo-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
+                title="สแกน QR Code เพื่อเบิกยาจากคลังยาในออกไปยังจุดจ่ายยาหน้าเคาน์เตอร์"
+              >
+                <QrCode className="w-3.5 h-3.5 text-indigo-600" />
+                <span>เบิกยาคลังใน (QR)</span>
+              </button>
+            )}
+          </div>
+
+        </div>
+
+        {/* ROW 2: ตัวกรองยา JHCIS: สถานะการใช้ยา (ด้านหน้า) + กลุ่มเวชภัณฑ์ (ด้านหลัง) + Chips */}
+        <div className="flex flex-wrap items-center justify-between gap-2.5 pt-0.5">
+          
+          <div className="flex flex-wrap items-center gap-2.5">
+            
+            {/* 1. สถานะการใช้ยาใน JHCIS (ย้ายมาไว้ด้านหน้า ตามที่ผู้ใช้สั่ง) */}
             <div className="flex items-center space-x-1.5">
-              <span className="text-xs font-bold text-slate-700 flex items-center space-x-1 whitespace-nowrap">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+              <span className="text-xs font-bold text-slate-700 flex items-center space-x-1.5 whitespace-nowrap">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 inline-block shadow-2xs"></span>
                 <span>สถานะการใช้ยา:</span>
               </span>
 
@@ -712,7 +759,7 @@ export default function DashboardView({
                   <div className="inline-flex items-center space-x-2">
                     {drugFlagFilter === '1' && (
                       <>
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block shadow-2xs"></span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
                         <span className="font-bold text-emerald-950">มีใช้ยา (1:ใช้ยา)</span>
                         <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold">
                           {summary.activeDrugs.toLocaleString()}
@@ -721,7 +768,7 @@ export default function DashboardView({
                     )}
                     {drugFlagFilter === '2' && (
                       <>
-                        <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
+                        <span className="w-2 h-2 rounded-full bg-slate-400 inline-block"></span>
                         <span className="font-bold text-slate-800">ไม่ใช้ยา (2:ไม่ใช้ยา)</span>
                         <span className="px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-mono text-[10px] font-bold">
                           {summary.inactiveDrugs.toLocaleString()}
@@ -829,10 +876,10 @@ export default function DashboardView({
               </div>
             </div>
 
-            {/* Divider */}
-            <div className="hidden xl:block h-5 w-px bg-slate-200" />
+            {/* Divider between Status and Category */}
+            <div className="h-4 w-px bg-slate-200 hidden sm:block" />
 
-            {/* 3. กลุ่มเวชภัณฑ์: Multi-Select Dropdown with Checkboxes */}
+            {/* 2. กลุ่มเวชภัณฑ์: Multi-Select Dropdown with Checkboxes (อยู่ด้านหลังสถานะการใช้ยา) */}
             <div className="flex items-center space-x-1.5">
               <span className="text-xs font-bold text-slate-700 flex items-center space-x-1 whitespace-nowrap">
                 <Filter className="w-3.5 h-3.5 text-emerald-600" />
@@ -865,7 +912,7 @@ export default function DashboardView({
                 </button>
 
                 {isCategoryDropdownOpen && (
-                  <div className="absolute left-0 sm:left-auto sm:right-0 lg:left-0 mt-1.5 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2.5 z-40 animate-in fade-in zoom-in-95">
+                  <div className="absolute left-0 mt-1.5 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2.5 z-40 animate-in fade-in zoom-in-95">
                     
                     {/* Header: Title and Quick Action Buttons */}
                     <div className="px-3 pb-2 border-b border-slate-100">
@@ -986,87 +1033,44 @@ export default function DashboardView({
               </div>
             </div>
 
-          </div>
-
-          {/* Quick Action Buttons (ตรวจนับสต็อก, นำเข้า Excel, เบิกยา QR) */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {onNavigateToCount && (
-              <button
-                type="button"
-                onClick={onNavigateToCount}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
-                title="ไปที่หน้าบันทึกตรวจนับสต็อกยกมาเริ่มต้นรอบใหม่"
-              >
-                <ClipboardCheck className="w-3.5 h-3.5 text-teal-600" />
-                <span>ตรวจนับสต็อกยกมา</span>
-                {summary?.countedDrugs > 0 && (
-                  <span className="bg-teal-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
-                    {summary.countedDrugs}
-                  </span>
-                )}
-              </button>
+            {/* Selected Category Chips (แสดงข้างๆ กลุ่มเวชภัณฑ์อย่างเป็นระเบียบ) */}
+            {selectedCategories.length > 0 && selectedCategories.length < ALL_JHCIS_CATEGORIES.length && (
+              <div className="flex flex-wrap items-center gap-1.5 pl-2 sm:border-l sm:border-slate-200">
+                {selectedCategories.map(catId => {
+                  const cat = ALL_JHCIS_CATEGORIES.find(c => c.id === catId);
+                  if (!cat) return null;
+                  const Icon = cat.icon;
+                  return (
+                    <span
+                      key={catId}
+                      className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-xs font-semibold shadow-2xs"
+                    >
+                      <Icon className="w-3 h-3 text-emerald-600" />
+                      <span>{cat.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleCategory(catId)}
+                        className="hover:bg-emerald-200 rounded-full p-0.5 transition-colors cursor-pointer ml-0.5"
+                        title={`ลบตัวกรอง ${cat.label}`}
+                      >
+                        <X className="w-3 h-3 text-emerald-700" />
+                      </button>
+                    </span>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategories(['01'])}
+                  className="text-[11px] text-slate-500 hover:text-emerald-700 underline ml-1 cursor-pointer font-medium"
+                >
+                  รีเซ็ตเป็นยาแผนปัจจุบัน
+                </button>
+              </div>
             )}
 
-            <button
-              type="button"
-              onClick={onNavigateToImport}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer hover:shadow-sm active:scale-95"
-              title="ไปที่หน้านำเข้าใบรับยาจาก รพ.แม่ข่าย (Excel / PDF)"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>+ นำเข้า Excel รับยา</span>
-            </button>
-
-            {onOpenSubstockQr && (
-              <button
-                type="button"
-                onClick={() => onOpenSubstockQr(null)}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
-                title="สแกน QR Code เพื่อเบิกยาจากคลังยาในออกไปยังจุดจ่ายยาหน้าเคาน์เตอร์"
-              >
-                <QrCode className="w-3.5 h-3.5 text-indigo-600" />
-                <span>เบิกยาคลังใน (QR)</span>
-              </button>
-            )}
           </div>
 
         </div>
-
-        {/* Selected Category Chips (ถ้าเลือกเฉพาะบางกลุ่ม) */}
-        {selectedCategories.length > 0 && selectedCategories.length < ALL_JHCIS_CATEGORIES.length && (
-          <div className="flex flex-wrap items-center gap-1.5 pt-1.5 border-t border-slate-100">
-            <span className="text-[11px] font-bold text-slate-500 mr-0.5">กลุ่มที่กำลังกรอง:</span>
-            {selectedCategories.map(catId => {
-              const cat = ALL_JHCIS_CATEGORIES.find(c => c.id === catId);
-              if (!cat) return null;
-              const Icon = cat.icon;
-              return (
-                <span
-                  key={catId}
-                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-medium"
-                >
-                  <Icon className="w-3 h-3 text-emerald-600" />
-                  <span>{cat.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => toggleCategory(catId)}
-                    className="hover:bg-emerald-200 rounded-full p-0.5 transition-colors cursor-pointer ml-0.5"
-                    title={`ลบตัวกรอง ${cat.label}`}
-                  >
-                    <X className="w-3 h-3 text-emerald-700" />
-                  </button>
-                </span>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setSelectedCategories(['01'])}
-              className="text-[11px] text-slate-500 hover:text-emerald-700 underline ml-1 cursor-pointer font-medium"
-            >
-              รีเซ็ตเป็นยาแผนปัจจุบัน
-            </button>
-          </div>
-        )}
 
       </div>
 
