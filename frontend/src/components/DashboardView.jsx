@@ -641,7 +641,7 @@ export default function DashboardView({
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
         
         {/* ROW 1: รอบบัญชี / ช่วงเวลา (ซ้าย) + ปุ่มปฏิบัติการคลังยา (ขวา) */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pb-2.5 border-b border-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-2.5 pb-2.5 border-b border-slate-100">
           
           {/* ซ้าย: รอบบัญชี & ช่วงเวลา */}
           <div className="flex flex-wrap items-center gap-2">
@@ -655,13 +655,13 @@ export default function DashboardView({
                     setPresetRange(e.target.value);
                   }
                 }}
-                className="text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2.5 py-1 focus:outline-emerald-500 cursor-pointer shadow-2xs"
+                className="text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 focus:outline-emerald-500 cursor-pointer shadow-2xs"
                 title="เลือกรอบปีงบประมาณหรือช่วงเวลาสำหรับคำนวณยอดยกมา รับเข้า จ่ายออก และคงเหลือ"
               >
-                <option value="fy_current">{currentFiscalYear().label} (1 ต.ค. 69 - 30 ก.ย. 70)</option>
-                <option value="fy_prev">{prevFiscalYear().label} (1 ต.ค. 68 - 30 ก.ย. 69)</option>
+                <option value="fy_current">{currentFiscalYear().label}</option>
+                <option value="fy_prev">{prevFiscalYear().label}</option>
                 <option value="this_month">เดือนปัจจุบัน</option>
-                <option value="last_3_months">ไตรมาสล่าสุด (3 เดือน)</option>
+                <option value="last_3_months">ไตรมาสล่าสุด (3 ด.)</option>
                 <option value="ytd">ทั้งปีปฏิทิน</option>
                 <option value="custom">กำหนดช่วงวันที่เอง...</option>
               </select>
@@ -671,7 +671,7 @@ export default function DashboardView({
                   type="date"
                   value={dateRange.startDate}
                   onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                  className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs"
+                  className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs w-[116px]"
                   title="วันที่เริ่มต้นรอบบัญชี (สำหรับคำนวณยอดยกมา)"
                 />
                 <span className="text-xs text-slate-400 font-medium">-</span>
@@ -679,23 +679,23 @@ export default function DashboardView({
                   type="date"
                   value={dateRange.endDate}
                   onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                  className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs"
+                  className="text-xs border border-slate-200 rounded-md px-1.5 py-1 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs w-[116px]"
                   title="วันที่สิ้นสุดรอบบัญชี (สำหรับคำนวณยอดคงเหลือสิ้นงวด)"
                 />
               </div>
             </div>
           </div>
 
-          {/* ขวา: Quick Action Buttons (ตรวจนับสต็อกยกมา, + นำเข้า Excel รับยา, เบิกยาคลังใน QR) */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {/* ขวา: Quick Action Buttons (ตรวจนับสต็อกยกมา, นำเข้า Excel รับยา, เบิกยาคลังใน QR) */}
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {onNavigateToCount && (
               <button
                 type="button"
                 onClick={onNavigateToCount}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-teal-50 hover:bg-teal-100/90 text-teal-900 border border-teal-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
+                className="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 bg-teal-50 hover:bg-teal-100/90 text-teal-900 border border-teal-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95 whitespace-nowrap"
                 title="ไปที่หน้าบันทึกตรวจนับสต็อกยกมาเริ่มต้นรอบใหม่"
               >
-                <ClipboardCheck className="w-3.5 h-3.5 text-teal-600" />
+                <ClipboardCheck className="w-3.5 h-3.5 text-teal-600 shrink-0" />
                 <span>ตรวจนับสต็อกยกมา</span>
                 {summary?.countedDrugs > 0 && (
                   <span className="bg-teal-600 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold">
@@ -708,21 +708,21 @@ export default function DashboardView({
             <button
               type="button"
               onClick={onNavigateToImport}
-              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer hover:shadow-sm active:scale-95"
+              className="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer hover:shadow-sm active:scale-95 whitespace-nowrap"
               title="ไปที่หน้านำเข้าใบรับยาจาก รพ.แม่ข่าย (Excel / PDF)"
             >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>+ นำเข้า Excel รับยา</span>
+              <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+              <span>นำเข้า Excel รับยา</span>
             </button>
 
             {onOpenSubstockQr && (
               <button
                 type="button"
                 onClick={() => onOpenSubstockQr(null)}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100/90 text-indigo-900 border border-indigo-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95"
+                className="inline-flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100/90 text-indigo-900 border border-indigo-200/90 rounded-xl text-xs font-bold shadow-2xs transition-all cursor-pointer hover:shadow-xs active:scale-95 whitespace-nowrap"
                 title="สแกน QR Code เพื่อเบิกยาจากคลังยาในออกไปยังจุดจ่ายยาหน้าเคาน์เตอร์"
               >
-                <QrCode className="w-3.5 h-3.5 text-indigo-600" />
+                <QrCode className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                 <span>เบิกยาคลังใน (QR)</span>
               </button>
             )}
