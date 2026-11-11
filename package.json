@@ -1,0 +1,38 @@
+{
+  "name": "jhcis-drug-stock",
+  "version": "1.0.0",
+  "description": "ระบบบริหารคลังยา รพ.สต. นำเข้า Excel รับยา รพ. และ Drug Stock เชื่อมต่อ JHCIS",
+  "main": "backend/src/server.js",
+  "scripts": {
+    "server": "node backend/src/server.js",
+    "client": "npm --prefix frontend run dev",
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,magenta\" \"npm run server\" \"npm run client\"",
+    "build": "npm --prefix frontend run build",
+    "build:installer": "node scripts/create_installer_exe.js",
+    "build:zip": "node scripts/create_portable_package.js",
+    "start": "node backend/src/server.js",
+    "test": "node scripts/test_system.js"
+  },
+  "keywords": [
+    "jhcis",
+    "drug-stock",
+    "stock-card",
+    "pharmacy",
+    "pcu"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "concurrently": "^10.0.5",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
+    "mysql2": "^3.24.4",
+    "otplib": "^13.5.0",
+    "pdf-parse": "^1.1.1",
+    "qrcode": "^1.5.4",
+    "xlsx": "^0.18.5"
+  }
+}

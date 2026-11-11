@@ -1,0 +1,802 @@
+[
+  {
+    "id": "map_1794378133812_og4gc",
+    "hospitalDrugName": "Acyclovir",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "59",
+    "jhcisdrugname": "ACYCLOVIR TAB 400 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133813_geufu",
+    "hospitalDrugName": "Albendazole",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "21",
+    "jhcisdrugname": "ALBENDAZOLE 200 MG Tab",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133813_aj1hy",
+    "hospitalDrugName": "Amlodipine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "771",
+    "jhcisdrugname": "AMLODIPINE 5 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133813_j950x",
+    "hospitalDrugName": "Amoxicillin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "328",
+    "jhcisdrugname": "AMOXYCILLIN CAP 500 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_s1hms",
+    "hospitalDrugName": "Aspirin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "8",
+    "jhcisdrugname": "ASPIRIN TAB 300 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_f1bfa",
+    "hospitalDrugName": "Atenolol",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "126",
+    "jhcisdrugname": "ATENOLOL TAB 100 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_97k4u",
+    "hospitalDrugName": "Calcium carbonate",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "88",
+    "jhcisdrugname": "Calcium carbonate TAB 1500 mg.",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_ibept",
+    "hospitalDrugName": "Cetiricine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "768",
+    "jhcisdrugname": "CETIRIZINE 10 MG. ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_gcad2",
+    "hospitalDrugName": "Cinnarizine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "129",
+    "jhcisdrugname": "CINNARICINE TAB  25 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_7kc88",
+    "hospitalDrugName": "Colchicine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "143",
+    "jhcisdrugname": "COLCHICINE TAB 0.6 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_1n9xa",
+    "hospitalDrugName": "CPM (Chlorphen)",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "121",
+    "jhcisdrugname": "CPM tab 4 mg.",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_rqimr",
+    "hospitalDrugName": "Dextromethorphan",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "177",
+    "jhcisdrugname": "DEXTROMETHORPHAN 15 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_eaa29",
+    "hospitalDrugName": "Diclofenac",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "639",
+    "jhcisdrugname": "DICLOFENAC TAB 25 mg. ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_mg1rl",
+    "hospitalDrugName": "Dicloxacillin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "653",
+    "jhcisdrugname": "DICLOXACILLIN CAP 250 mg.",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_u0fo5",
+    "hospitalDrugName": "Dimenhydrinate",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "193",
+    "jhcisdrugname": "DIMENHYDRINATE INJ. 50 MG",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133814_s23jl",
+    "hospitalDrugName": "Domperidone",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "197",
+    "jhcisdrugname": "DOMPERIDONE susp. 5mg/5ml",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133814_l9sdv",
+    "hospitalDrugName": "Doxazosin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "162",
+    "jhcisdrugname": "DOXAZOSIN 2 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_guecf",
+    "hospitalDrugName": "Enalapril",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "94",
+    "jhcisdrugname": "ENALAPRIL 20 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_y54d9",
+    "hospitalDrugName": "Ferrous fumarate",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "866",
+    "jhcisdrugname": "FERROUS FUMARATE 200 MG.",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_yz35x",
+    "hospitalDrugName": "Folic acid",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "231",
+    "jhcisdrugname": "FOLIC ACID TAB  5 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_b8ihx",
+    "hospitalDrugName": "Furosemide",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "235",
+    "jhcisdrugname": "FUROSEMIDE TAB 40 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_39oc4",
+    "hospitalDrugName": "Gemfibrozil",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "175",
+    "jhcisdrugname": "GEMFIBROZIL 600 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_5p3ra",
+    "hospitalDrugName": "Glipizide",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "446",
+    "jhcisdrugname": "GLIPIZIDE 5  MG. ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_c730p",
+    "hospitalDrugName": "Glyceryl Guiacolate",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "988",
+    "jhcisdrugname": "GLYCERYL GUAIACOLATE 100 mg",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_qr138",
+    "hospitalDrugName": "HCTZ 25mg",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "262",
+    "jhcisdrugname": "HCTZ TAB. 25 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_es095",
+    "hospitalDrugName": "Hydralazine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "57",
+    "jhcisdrugname": "HYDRALAZINE 25 mg",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_a6o3p",
+    "hospitalDrugName": "Hydroxyzine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "272",
+    "jhcisdrugname": "HYDROXYZINE 10 MG ",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_gsjbx",
+    "hospitalDrugName": "Hyoscine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "645",
+    "jhcisdrugname": "HYOSCINE TAB. 10 mg.",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_0fjws",
+    "hospitalDrugName": "Ibuprofen",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "869",
+    "jhcisdrugname": "IBUPROFEN SUSP 100 mg/5 ml.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133814_zo8tb",
+    "hospitalDrugName": "Losartan potassium",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "1092",
+    "jhcisdrugname": "Losartan 50 mg",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133814_ad7io",
+    "hospitalDrugName": "Metformin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "747",
+    "jhcisdrugname": "METFORMIN 500 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133815_d0bv5",
+    "hospitalDrugName": "Methyldopa",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "182",
+    "jhcisdrugname": "METHYLDOPA 125 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133815_uwdhj",
+    "hospitalDrugName": "Metoprolol",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "876",
+    "jhcisdrugname": "METOPROLOL TARTRATE 100 mg.",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133815_mg8tu",
+    "hospitalDrugName": "Metronidazole",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "364",
+    "jhcisdrugname": "METRONIDAZOLE TAB 200 MG",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133815_bitfd",
+    "hospitalDrugName": "Moduretic (HCTZ+Amiloride)",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "490",
+    "jhcisdrugname": "MODURATIC TAB",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133817_w6ik9",
+    "hospitalDrugName": "Multivitamin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "378",
+    "jhcisdrugname": "MTV. TAB",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133817_fwy6u",
+    "hospitalDrugName": "Omeprazole",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "774",
+    "jhcisdrugname": "OMEPRAZOLE  20 MG.",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133817_d0z9v",
+    "hospitalDrugName": "Orphenadrine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "880",
+    "jhcisdrugname": "ORPHENADRINE 70 MG.",
+    "updatedAt": "2026-11-11T07:20:07.189Z"
+  },
+  {
+    "id": "map_1794378133817_r4y47",
+    "hospitalDrugName": "Paracetamol",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "419",
+    "jhcisdrugname": "PARACETAMOL SYR 120 MG",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133817_wzaje",
+    "hospitalDrugName": "Prednisolone",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "460",
+    "jhcisdrugname": "PREDNISOLONE 5 MG",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_zb2lb",
+    "hospitalDrugName": "Propranolol",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "474",
+    "jhcisdrugname": "PROPANOLOL TAB 10 MG.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_6o5la",
+    "hospitalDrugName": "PTU",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "476",
+    "jhcisdrugname": "PTU 50 MG (Propylthiouracil)",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_r179z",
+    "hospitalDrugName": "Roxithromycin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "702",
+    "jhcisdrugname": "ROXITHROMYCIN 150 MG ",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_t4wz9",
+    "hospitalDrugName": "Simvastatin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "887",
+    "jhcisdrugname": "SIMVASTATIN 20 MG",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_npv6n",
+    "hospitalDrugName": "Sodium bicarbonate",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "61",
+    "jhcisdrugname": "SODA MINT 300 mg.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_1kndo",
+    "hospitalDrugName": "Spironolactone",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "712",
+    "jhcisdrugname": "SPIRONORACTONE 25 MG.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_n8dxd",
+    "hospitalDrugName": "Theophylline SR",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "891",
+    "jhcisdrugname": "THEOPHYLLINE  200 MG",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_vn80h",
+    "hospitalDrugName": "Thyroxin sodium",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "306",
+    "jhcisdrugname": "THYROXINE SODIUM TAB.0.1MG",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_jmntp",
+    "hospitalDrugName": "Vitamin Bco",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "585",
+    "jhcisdrugname": "VITAMIN B CO TAB. ",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_kern8",
+    "hospitalDrugName": "Vitamin B1-6-12",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "580",
+    "jhcisdrugname": "VITAMIN B1+B6+B12 TAB SAMBEE",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_ng4u1",
+    "hospitalDrugName": "Vitamin C tab100mg",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "58",
+    "jhcisdrugname": "Vitamin C  TAB 100 mg.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_x8aqf",
+    "hospitalDrugName": "CPM",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "118",
+    "jhcisdrugname": "CPM. INJ. 10 MG/ML",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_uzz0r",
+    "hospitalDrugName": "Dexamethasone",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "172",
+    "jhcisdrugname": "DEXAMETHASONE INJ. 4 MG/ML",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_furd5",
+    "hospitalDrugName": "Glucose",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "641",
+    "jhcisdrugname": "DEXTROSE 50% INJ. 50ml.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_mx403",
+    "hospitalDrugName": "Hyoscine-n-butyl Br",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "274",
+    "jhcisdrugname": "HYOSCINE INJ. 20 MG/ML",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_7xsci",
+    "hospitalDrugName": "Lidocaine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "317",
+    "jhcisdrugname": "LIDOCAINE HCl INJ. 2%",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_m5w8b",
+    "hospitalDrugName": "Medroxyprogesterone",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "222",
+    "jhcisdrugname": "Medroxyprogesterone acetate inj. (DMPA)",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_4tg1f",
+    "hospitalDrugName": "Tetanus toxoid",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "890",
+    "jhcisdrugname": "TETANUS TOXOID INJ. 0.5 ML (TETANUS TOXOID 40 UNITS/0.5 ML)",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_bp5js",
+    "hospitalDrugName": "Ammonium Carbonate ped.",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "781",
+    "jhcisdrugname": "AMMONIUM CARBONATE 60ml.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_n4xjh",
+    "hospitalDrugName": "Amoxycillin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "186",
+    "jhcisdrugname": "AMOXYCILLIN DRY SYR. 250 MG/5ml",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_woq4a",
+    "hospitalDrugName": "Chlopheniramine",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "119",
+    "jhcisdrugname": "CPM. SYR. 2 MG/5ml ",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_k0mri",
+    "hospitalDrugName": "Erythromycin",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "220",
+    "jhcisdrugname": "ERYTHROMYCIN 125MG/5ML sus.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_mpoqz",
+    "hospitalDrugName": "Ferrous Drop15mL",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "173",
+    "jhcisdrugname": "FERDEX  Drop 15 ml.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_7aikj",
+    "hospitalDrugName": "Glyceryl. Guaiacolate",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "902",
+    "jhcisdrugname": "GUAIFENESIN syr 60ml",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_2khm7",
+    "hospitalDrugName": "Hyoscine-n-bytyl Br",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "713",
+    "jhcisdrugname": "HYOSCINE SYR.",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_sc3bd",
+    "hospitalDrugName": "Milk of magnesia",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "370",
+    "jhcisdrugname": "MILK OF MAGNESIA",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133817_rsodx",
+    "hospitalDrugName": "multivitamin syr",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "377",
+    "jhcisdrugname": "MTV. SYRUP (ยาวิตามินรวมสำหรับเด็ก)",
+    "updatedAt": "2026-11-11T07:20:07.190Z"
+  },
+  {
+    "id": "map_1794378133818_v52yh",
+    "hospitalDrugName": "ORS รสส้มเด็ก",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "1093",
+    "jhcisdrugname": "ORS เด็ก ",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133819_0ilst",
+    "hospitalDrugName": "ORS รสส้มผู้ใหญ่",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "411",
+    "jhcisdrugname": "ORS. ผู้ใหญ่ ",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133819_0zm41",
+    "hospitalDrugName": "Salbutamol",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "738",
+    "jhcisdrugname": "SALBUTAMOL SYR.60ML (ยาน้ำขยายหลอดลม Salbutamol)",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133819_lpfz6",
+    "hospitalDrugName": "Simethicone drop",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "837",
+    "jhcisdrugname": "Simethicone 40mg/0.6ml (Air-X)drop สำหรับเด็ก",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133819_y3bbh",
+    "hospitalDrugName": "Aromatic ammonia spirit",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "71",
+    "jhcisdrugname": "AMMONIA SOLUTION (แอมโมเนียหอม)",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133819_abzgd",
+    "hospitalDrugName": "Benzyl benzoate (ยารักษาหิดเหา)",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "72",
+    "jhcisdrugname": "BENZYL BENZOATE 60 ml.",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133819_xo225",
+    "hospitalDrugName": "Calamine lotion",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "90",
+    "jhcisdrugname": "CALAMINE LOTION",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133819_g75rd",
+    "hospitalDrugName": "Chloramphenicol eye drop",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "110",
+    "jhcisdrugname": "Chloramphenicol eye drop 0.5%",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133819_cw7fa",
+    "hospitalDrugName": "Chlortetracycline eye oint 1%",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "414",
+    "jhcisdrugname": "Chlortetracycline ointment 1%",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133820_x6sy1",
+    "hospitalDrugName": "Clotrimazole cr 1%",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "848",
+    "jhcisdrugname": "CLOTRIMAZOLE 1% CREAM 10g.",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133820_txkie",
+    "hospitalDrugName": "Enema (Unison)",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "652",
+    "jhcisdrugname": "ENEMA 100 ML (ยาสวนทวาร 100 มิลลิลิตร)",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133820_0ejh3",
+    "hospitalDrugName": "Ethyl alcohol (GPO alc)70%",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "1075",
+    "jhcisdrugname": "ALCOHOL 70% 450ML.",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133820_tf945",
+    "hospitalDrugName": "Povidone Iodine 10%",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "152",
+    "jhcisdrugname": "POVIDINE SOLUTION 10% (น้ำยาทาแผล POVIDINE)",
+    "updatedAt": "2026-11-11T07:20:07.191Z"
+  },
+  {
+    "id": "map_1794378133820_yiz6q",
+    "hospitalDrugName": "TA0.02%",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "784",
+    "jhcisdrugname": "TA 0.02% CREAM หลอด 15 g.",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_dvt41",
+    "hospitalDrugName": "TA 0.1%",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "176",
+    "jhcisdrugname": "TA 0.1% CREAM ตลับ 10 g.",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_7382e",
+    "hospitalDrugName": "TA oral paste",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "896",
+    "jhcisdrugname": "KANOLONE ORAL PASTE",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_rujod",
+    "hospitalDrugName": "Berodual inh",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "704",
+    "jhcisdrugname": "BERODUAL INH. ยาพ่นทางปาก",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_nndn5",
+    "hospitalDrugName": "Budesonide MDI",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "123",
+    "jhcisdrugname": "BUDESONIDE INH. ยาพ่นทางปาก",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_kejgh",
+    "hospitalDrugName": "salbutamal solution",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "100409000000700170781592",
+    "jhcisdrugname": "Salbutamol INH. 5mg/ml 20 ml. (Venterol)",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_oack6",
+    "hospitalDrugName": "ขมิ้นชัน แคปซูล",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "410000000109150020182748",
+    "jhcisdrugname": "ขมิ้นชันแคปซูล 500 mg. [14วัน]*",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_6drqv",
+    "hospitalDrugName": "เถาวัลเปรียง แคปซูล",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "420000005549150020182737",
+    "jhcisdrugname": "เถาวัลย์เปรียงแคปซูล 500 mg [14วัน]*",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_5pyne",
+    "hospitalDrugName": "พญายอครีม",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "410000000389300550282750",
+    "jhcisdrugname": "ครีมพญายอ ตราไตร-แว็ก หลอด 5 g.",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_21elb",
+    "hospitalDrugName": "เพชรสังฆาตยาแคปซูล",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "420000003299150020182750",
+    "jhcisdrugname": "ยาแคปซูลผสมเพชรสังฆาต 500mg [14วัน]*",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_5gii9",
+    "hospitalDrugName": "ฟ้าทะลายโจร แคปซูล",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "410000000047000002011376",
+    "jhcisdrugname": "ฟ้าทะลายโจรแคปซูล 500 mg [7วัน]",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_27kyc",
+    "hospitalDrugName": "มะขามแขก",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "420000007879140020182758",
+    "jhcisdrugname": "มะขามแขกแคปซูล 400 mg. [7วัน]*",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_oafeo",
+    "hospitalDrugName": "มะขามป้อมน้ำแก้ไอ",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "420000001540000094711170",
+    "jhcisdrugname": "ยาน้ำแก้ไอผสมมะขามป้อม 120ml [7วัน]*",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_7dhxe",
+    "hospitalDrugName": "รางจืดแคปซูล",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "420000007839140020182758",
+    "jhcisdrugname": "ยาแคปซูลผสมรางจืด อภัยภูเบศร [7วัน]",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_zwa28",
+    "hospitalDrugName": "หญ้าหนวดแมวชาชง",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "410000000649200334182750",
+    "jhcisdrugname": "ยาชงหญ้าหนวดแมว (10ถุงชาเล็ก) [14วัน]",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133820_digp0",
+    "hospitalDrugName": "มะแว้ง",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "420000003969120020382755",
+    "jhcisdrugname": "ยาอมผสมมะแว้งรสบ๊วย [7วัน]*",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133821_2rgba",
+    "hospitalDrugName": "D-5-1/2S",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "160",
+    "jhcisdrugname": "D-5-S/2 1000 ML bottle",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133821_tv0ea",
+    "hospitalDrugName": "NSS.",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "100942000000780210181474",
+    "jhcisdrugname": "NSS 0.9% INJ 500 ML",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133821_jhgfe",
+    "hospitalDrugName": "NSS ล้างแผล",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "793",
+    "jhcisdrugname": "NSS 0.9% IRRIGATE 1000 ml.",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_1794378133821_neyys",
+    "hospitalDrugName": "Water for inj 10cc",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "969",
+    "jhcisdrugname": "Sterile Water for INJ.10 ml.",
+    "updatedAt": "2026-11-11T07:20:07.192Z"
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "host": "localhost",
+  "port": 3333,
+  "user": "root",
+  "password": "",
+  "database": "jhcisdb",
+  "charset": "tis620",
+  "mode": "live",
+  "autoFallbackToDemo": true,
+  "admins": [
+    "admin"
+  ],
+  "pcucode": "00000",
+  "pcuname": "โรงพยาบาลส่งเสริมสุขภาพตำบล (รพ.สต.)",
+  "pcuAddress": "ที่อยู่หน่วยบริการ",
+  "motherHospital": "โรงพยาบาลแม่ข่าย",
+  "allowedOrigins": [
+    "http://localhost:5000",
+    "http://localhost:3000",
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:3000"
+  ],
+  "receiptSource": "local"
+}

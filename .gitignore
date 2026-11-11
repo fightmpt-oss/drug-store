@@ -1,0 +1,102 @@
+# ==============================================================================
+# JHCIS Drug Store - Security & PDPA Strict .gitignore
+# พระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. ๒๕๖๒ (PDPA) & Healthcare Privacy
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Credentials, Configs & Environment Variables (ห้ามนำรหัสผ่าน/IP ขึ้นเด็ดขาด)
+# ------------------------------------------------------------------------------
+backend/config.json
+*.env
+*.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+
+# ------------------------------------------------------------------------------
+# 2. Local Database, Patient Sessions, Audit Logs & Inventory Data (PDPA / PHI)
+# ------------------------------------------------------------------------------
+backend/src/data/localdb/*.json
+backend/src/data/localdb/*.bak.json
+backend/src/data/localdb/*.log
+!backend/src/data/localdb/README.txt
+
+# ------------------------------------------------------------------------------
+# 3. Backups & Historical Snapshots (มีข้อมูลฐานข้อมูล JHCIS และการ match ยาของหน่วยบริการ)
+# ------------------------------------------------------------------------------
+backup/*
+!backup/README.txt
+
+# ------------------------------------------------------------------------------
+# 4. Hospital Specific Drug Catalogues & Master Files (ของหน่วยบริการเฉพาะแห่ง)
+# ------------------------------------------------------------------------------
+drugcatalogue/*
+!drugcatalogue/README.txt
+
+# ------------------------------------------------------------------------------
+# 5. Received Requisition Documents (ใบเบิกยา, ใบรับยา, สลิปคนไข้ - ห้ามนำขึ้นเด็ดขาด)
+# ------------------------------------------------------------------------------
+received_documents/excel/*
+received_documents/pdf/*
+!received_documents/excel/README.txt
+!received_documents/pdf/README.txt
+backend/uploads/*
+!backend/uploads/README.txt
+
+# Patient / Requisition Spreadsheets anywhere in workspace
+*.xlsx
+*.xls
+*.csv
+# ยกเว้น master reference ทะเบียนยาสมุนไพรของกรมฯ DTAM
+!backend/data/dtam/dtam_master.xlsx
+
+# Scratch & Temporary debug scripts
+scripts/step_*.json
+scripts/*.html
+scripts/dtam_sample.xlsx
+
+# ------------------------------------------------------------------------------
+# 6. System & Application Logs
+# ------------------------------------------------------------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------------------------------------------------------
+# 7. Dependencies & Runtimes (ขนาดใหญ่)
+# ------------------------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+bin/
+
+# ------------------------------------------------------------------------------
+# 8. Build Outputs, Installers & Distribution Binaries (50MB+ Executables)
+# ------------------------------------------------------------------------------
+dist/
+frontend/dist/
+build-package/
+*.exe
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.iso
+
+# ------------------------------------------------------------------------------
+# 9. OS & IDE Metadata
+# ------------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
