@@ -133,6 +133,20 @@ const mockDrugs = [
     minstock: 50,
     maxstock: 200,
     location: 'ตู้ยาเด็ก D-01'
+  },
+  {
+    drugcode: '733',
+    didstandard: '201010000007330000001533',
+    drugname: 'CAFEGOT',
+    drugnamethai: 'คาเฟอร์กอต',
+    druggenericname: 'Ergotamine tartrate 1 mg + Caffeine 100 mg',
+    drugtype: 'ยาเม็ด',
+    drugunit: 'เม็ด',
+    unitpacking: '10 เม็ด/แผง',
+    costprice: 2.50,
+    minstock: 100,
+    maxstock: 1000,
+    location: 'ตู้ยา A-04'
   }
 ];
 

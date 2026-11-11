@@ -144,7 +144,10 @@ const CLINICAL_ABBREVIATIONS = {
   'd5': ['dextrose'],
   'wfi': ['water for injection', 'water for inj'],
   'berodual': ['fenoterol', 'ipratropium'],
-  'hyoscine': ['hyoscine', 'butylbromide']
+  'hyoscine': ['hyoscine', 'butylbromide'],
+  'cafergot': ['cafegot', 'ergotamine', 'caffeine'],
+  'cafegot': ['cafergot', 'ergotamine', 'caffeine'],
+  'ergotamine': ['cafergot', 'cafegot']
 };
 
 // -------------------------------------------------------------------------
@@ -153,6 +156,10 @@ const CLINICAL_ABBREVIATIONS = {
 // -------------------------------------------------------------------------
 const HOSPITAL_06020_SEED_ALIASES = {
   // ยาเม็ด / แคปซูล
+  'cafergot (ergotamine+caffeine) (1+100 mg) (tab)': '733',
+  'cafergot (ergotamine+caffeine)': '733',
+  'cafergot': '733',
+  'cafegot': '733',
   'aspirin 81 mg (tab)': '662',
   'aspirin 81 mg': '662',
   'aspirin 300 mg (tab)': '8',
@@ -849,9 +856,45 @@ async function commitExcelInitialStock(items, options = {}, actor = 'เจ้�
     const targetDrug = drugMap[drugcode];
     const drugname = it.drugname || targetDrug?.drugname || drugcode;
     const qty = Number(it.qty) || 0;
-    if (qty <= 0) continue;
 
-    // Dual-unit settings configuration
+    // 1. Save mappings if requested and rawName is provided (จดจำการจับคู่เสมอ ไม่ว่าจะมียอดหรือยอดคงเหลือเป็น 0)
+    if (shouldSaveMappings && it.rawName) {
+      const cleanRawName = String(it.rawName).trim();
+      const normRaw = cleanRawName.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
+      const currentPcu = getPcuCode() || '';
+      let existing = (memoryStore.drugMappings || []).find(m => {
+        if (m.pcucode && currentPcu && m.pcucode !== currentPcu) return false;
+        const mNorm = (m.hospitalDrugName || m.drugname || '').toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
+        return mNorm === normRaw;
+      });
+
+      if (existing) {
+        existing.pcucode = currentPcu;
+        existing.jhcisdrugcode = drugcode;
+        existing.jhcisdrugname = drugname;
+        existing.matchedDrugCode = drugcode;
+        existing.matchedDrugName = drugname;
+        existing.updatedAt = new Date().toISOString();
+        savedMappingsCount++;
+      } else {
+        if (!memoryStore.drugMappings) memoryStore.drugMappings = [];
+        memoryStore.drugMappings.push({
+          id: `map_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          pcucode: currentPcu,
+          hospitalDrugName: cleanRawName,
+          drugname: cleanRawName,
+          hosdrugcode: it.hosdrugcode || '',
+          jhcisdrugcode: drugcode,
+          matchedDrugCode: drugcode,
+          jhcisdrugname: drugname,
+          matchedDrugName: drugname,
+          updatedAt: new Date().toISOString()
+        });
+        savedMappingsCount++;
+      }
+    }
+
+    // 2. Dual-unit settings configuration
     if (it.repackInfo && it.repackInfo.isDualUnit) {
       try {
         await setDrugSettings(drugcode, {
@@ -867,7 +910,7 @@ async function commitExcelInitialStock(items, options = {}, actor = 'เจ้�
       }
     }
 
-    // Floor stock / Procedure settings configuration (Lidocaine etc.)
+    // 3. Floor stock / Procedure settings configuration (Lidocaine etc.)
     if (it.floorStockInfo && it.floorStockInfo.isFloorStock) {
       try {
         await setDrugSettings(drugcode, {
@@ -883,37 +926,8 @@ async function commitExcelInitialStock(items, options = {}, actor = 'เจ้�
       }
     }
 
-    // Save mappings if requested and rawName is provided
-    if (shouldSaveMappings && it.rawName) {
-      const cleanRawName = String(it.rawName).trim();
-      const normRaw = cleanRawName.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-      const currentPcu = getPcuCode() || '';
-      let existing = (memoryStore.drugMappings || []).find(m => {
-        if (m.pcucode && currentPcu && m.pcucode !== currentPcu) return false;
-        const mNorm = (m.hospitalDrugName || m.drugname || '').toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
-        return mNorm === normRaw;
-      });
-
-      if (existing) {
-        existing.pcucode = currentPcu;
-        existing.jhcisdrugcode = drugcode;
-        existing.jhcisdrugname = drugname;
-        existing.updatedAt = new Date().toISOString();
-        savedMappingsCount++;
-      } else {
-        if (!memoryStore.drugMappings) memoryStore.drugMappings = [];
-        memoryStore.drugMappings.push({
-          id: `map_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          pcucode: currentPcu,
-          hospitalDrugName: cleanRawName,
-          hosdrugcode: it.hosdrugcode || '',
-          jhcisdrugcode: drugcode,
-          jhcisdrugname: drugname,
-          updatedAt: new Date().toISOString()
-        });
-        savedMappingsCount++;
-      }
-    }
+    // 4. บันทึกยอดตรวจนับเข้าคลัง (ข้ามเฉพาะกรณียอดติดลบ)
+    if (qty < 0) continue;
 
     const lotno = it.lotno && String(it.lotno).trim() !== '0' ? String(it.lotno).trim() : 'LOT-BF69';
     const dateexpire = it.dateexpire || '';

@@ -798,5 +798,29 @@
     "jhcisdrugcode": "969",
     "jhcisdrugname": "Sterile Water for INJ.10 ml.",
     "updatedAt": "2026-11-11T07:20:07.192Z"
+  },
+  {
+    "id": "map_cafergot_733",
+    "pcucode": "06020",
+    "hospitalDrugName": "Cafergot (Ergotamine+Caffeine)",
+    "drugname": "Cafergot (Ergotamine+Caffeine)",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "733",
+    "jhcisdrugname": "CAFEGOT",
+    "matchedDrugCode": "733",
+    "matchedDrugName": "CAFEGOT",
+    "updatedAt": "2026-11-11T17:08:00.000Z"
+  },
+  {
+    "id": "map_cafergot_short_733",
+    "pcucode": "06020",
+    "hospitalDrugName": "Cafergot",
+    "drugname": "Cafergot",
+    "hosdrugcode": "",
+    "jhcisdrugcode": "733",
+    "jhcisdrugname": "CAFEGOT",
+    "matchedDrugCode": "733",
+    "matchedDrugName": "CAFEGOT",
+    "updatedAt": "2026-11-11T17:08:00.000Z"
   }
 ]

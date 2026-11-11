@@ -23,7 +23,10 @@ const COMMON_ALIASES = {
   'ventolin': 'salbutamol',
   'berodual': 'ipratropium',
   'ors': 'ors',
-  'nss': 'sodium chloride'
+  'nss': 'sodium chloride',
+  'cafergot': 'cafegot',
+  'cafegot': 'cafegot',
+  'ergotamine': 'cafegot'
 };
 
 const DOSAGE_FORMS = [
