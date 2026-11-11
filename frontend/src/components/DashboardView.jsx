@@ -619,75 +619,80 @@ export default function DashboardView({
         </div>
       )}
 
-      {/* Page Header (จัดวางแบบ Modern Clean: หัวข้อกระชับ 1 บรรทัด และตัวเลือกรอบบัญชีสวยงาม) */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-1">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center space-x-2">
-            <span>ภาพรวมสต็อกและคลังยา รพ.สต.</span>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-              JHCIS DB
-            </span>
+      {/* Page Title Banner (แถบหัวข้อกล่องสีมรกตหรูหรา เต็มความกว้าง 1 บรรทัด) */}
+      <div className="bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-700 text-white px-4 py-2.5 rounded-2xl shadow-xs border border-emerald-600/80">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="p-1 rounded-lg bg-white/20 text-white backdrop-blur-xs shrink-0 shadow-2xs">
+            <Package className="w-4 h-4 text-emerald-100" />
+          </div>
+          <h1 className="text-base sm:text-lg font-black tracking-tight text-white whitespace-nowrap">
+            ภาพรวมสต็อกและคลังยา รพ.สต.
           </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            ระบบสต็อกการ์ดคำนวณยอดยกมา รับเข้า จ่ายออกจริงจาก JHCIS (visitdrug) และตรวจสอบวันหมดอายุ (FEFO)
-          </p>
-        </div>
-
-        {/* Date Filter & Presets (รอบปีงบประมาณ / รอบบัญชีตัดสต็อก กระทัดรัด ไม่เบียดหัวข้อ) */}
-        <div className="flex flex-wrap items-center gap-2 bg-white px-3 py-1.5 rounded-2xl border border-slate-200 shadow-2xs shrink-0 w-full sm:w-auto">
-          <div className="flex items-center space-x-1.5 text-xs text-slate-700 shrink-0 font-bold">
-            <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">รอบบัญชี:</span>
-          </div>
-
-          <select
-            value={currentPreset}
-            onChange={(e) => {
-              if (e.target.value !== 'custom') {
-                setPresetRange(e.target.value);
-              }
-            }}
-            className="text-xs font-bold text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-emerald-500 cursor-pointer shadow-2xs"
-            title="เลือกรอบปีงบประมาณหรือช่วงเวลาสำหรับคำนวณยอดยกมา รับเข้า จ่ายออก และคงเหลือ"
-          >
-            <option value="fy_current">{currentFiscalYear().label} (1 ต.ค. 69 - 30 ก.ย. 70)</option>
-            <option value="fy_prev">{prevFiscalYear().label} (1 ต.ค. 68 - 30 ก.ย. 69)</option>
-            <option value="this_month">เดือนปัจจุบัน</option>
-            <option value="last_3_months">ไตรมาสล่าสุด (3 เดือน)</option>
-            <option value="ytd">ทั้งปีปฏิทิน</option>
-            <option value="custom">กำหนดช่วงวันที่เอง...</option>
-          </select>
-
-          <div className="flex items-center space-x-1 pl-1 border-l border-slate-200">
-            <input
-              type="date"
-              value={dateRange.startDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 text-slate-800 font-semibold focus:outline-emerald-500 focus:bg-white shadow-2xs"
-              title="วันที่เริ่มต้นรอบบัญชี (สำหรับคำนวณยอดยกมา)"
-            />
-            <span className="text-xs text-slate-400 font-medium">-</span>
-            <input
-              type="date"
-              value={dateRange.endDate}
-              onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-              className="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 text-slate-800 font-semibold focus:outline-emerald-500 focus:bg-white shadow-2xs"
-              title="วันที่สิ้นสุดรอบบัญชี (สำหรับคำนวณยอดคงเหลือสิ้นงวด)"
-            />
-          </div>
+          <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/25 backdrop-blur-xs whitespace-nowrap shadow-2xs">
+            JHCIS DB
+          </span>
+          <span className="text-xs text-emerald-100 font-normal">
+            • ระบบสต็อกการ์ดคำนวณยอดยกมา รับเข้า จ่ายออกจริงจาก JHCIS (visitdrug) และตรวจสอบวันหมดอายุ (FEFO)
+          </span>
         </div>
       </div>
 
-      {/* JHCIS Classification Bar (Dropdowns สำหรับสถานะการใช้ยา & กลุ่มเวชภัณฑ์แบบติ๊กเลือกได้หลายหัวข้อ) */}
+      {/* JHCIS Classification & Filter Bar (รวมตัวกรองทั้งหมด: รอบบัญชี, สถานะการใช้ยา, กลุ่มเวชภัณฑ์ และปุ่มด่วน) */}
       <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3">
           
-          <div className="flex flex-wrap items-center gap-3">
-            {/* 1. สถานะการใช้ยาใน JHCIS: Dropdown */}
-            <div className="flex items-center space-x-2">
+          {/* กลุ่มตัวกรองหลัก: รอบบัญชี + สถานะการใช้ยา + กลุ่มเวชภัณฑ์ */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            
+            {/* 1. รอบบัญชี / ช่วงเวลา (ย้ายมาไว้ในกล่องเดียวกับสถานะการใช้ยาและกลุ่มเวชภัณฑ์) */}
+            <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 shadow-2xs">
+              <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span className="text-xs font-bold text-slate-700 whitespace-nowrap">รอบบัญชี:</span>
+              <select
+                value={currentPreset}
+                onChange={(e) => {
+                  if (e.target.value !== 'custom') {
+                    setPresetRange(e.target.value);
+                  }
+                }}
+                className="text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 focus:outline-emerald-500 cursor-pointer shadow-2xs"
+                title="เลือกรอบปีงบประมาณหรือช่วงเวลาสำหรับคำนวณยอดยกมา รับเข้า จ่ายออก และคงเหลือ"
+              >
+                <option value="fy_current">{currentFiscalYear().label} (1 ต.ค. 69 - 30 ก.ย. 70)</option>
+                <option value="fy_prev">{prevFiscalYear().label} (1 ต.ค. 68 - 30 ก.ย. 69)</option>
+                <option value="this_month">เดือนปัจจุบัน</option>
+                <option value="last_3_months">ไตรมาสล่าสุด (3 เดือน)</option>
+                <option value="ytd">ทั้งปีปฏิทิน</option>
+                <option value="custom">กำหนดช่วงวันที่เอง...</option>
+              </select>
+
+              <div className="hidden sm:flex items-center space-x-1 pl-1 border-l border-slate-200">
+                <input
+                  type="date"
+                  value={dateRange.startDate}
+                  onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
+                  className="text-xs border border-slate-200 rounded-md px-1.5 py-0.5 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs"
+                  title="วันที่เริ่มต้นรอบบัญชี (สำหรับคำนวณยอดยกมา)"
+                />
+                <span className="text-xs text-slate-400 font-medium">-</span>
+                <input
+                  type="date"
+                  value={dateRange.endDate}
+                  onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
+                  className="text-xs border border-slate-200 rounded-md px-1.5 py-0.5 bg-white text-slate-800 font-semibold focus:outline-emerald-500 shadow-2xs"
+                  title="วันที่สิ้นสุดรอบบัญชี (สำหรับคำนวณยอดคงเหลือสิ้นงวด)"
+                />
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden xl:block h-5 w-px bg-slate-200" />
+
+            {/* 2. สถานะการใช้ยาใน JHCIS: Dropdown */}
+            <div className="flex items-center space-x-1.5">
               <span className="text-xs font-bold text-slate-700 flex items-center space-x-1 whitespace-nowrap">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                <span>สถานะการใช้ยาใน JHCIS:</span>
+                <span>สถานะการใช้ยา:</span>
               </span>
 
               <div className="relative" ref={flagDropdownRef}>
@@ -825,10 +830,10 @@ export default function DashboardView({
             </div>
 
             {/* Divider */}
-            <div className="hidden sm:block h-5 w-px bg-slate-200" />
+            <div className="hidden xl:block h-5 w-px bg-slate-200" />
 
-            {/* 2. กลุ่มเวชภัณฑ์: Multi-Select Dropdown with Checkboxes */}
-            <div className="flex items-center space-x-2">
+            {/* 3. กลุ่มเวชภัณฑ์: Multi-Select Dropdown with Checkboxes */}
+            <div className="flex items-center space-x-1.5">
               <span className="text-xs font-bold text-slate-700 flex items-center space-x-1 whitespace-nowrap">
                 <Filter className="w-3.5 h-3.5 text-emerald-600" />
                 <span>กลุ่มเวชภัณฑ์:</span>
@@ -850,7 +855,7 @@ export default function DashboardView({
                   }`}
                   title="คลิกเพื่อเลือกกลุ่มเวชภัณฑ์ (เลือกได้หลายกลุ่มพร้อมกัน)"
                 >
-                  <div className="inline-flex items-center space-x-1.5 max-w-[220px] sm:max-w-xs md:max-w-sm truncate">
+                  <div className="inline-flex items-center space-x-1.5 max-w-[200px] sm:max-w-xs truncate">
                     <span className="truncate font-bold text-slate-800">{categoryTriggerLabel}</span>
                     <span className="shrink-0 px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold">
                       {selectedCategoriesTotalCount.toLocaleString()}
@@ -983,7 +988,7 @@ export default function DashboardView({
 
           </div>
 
-          {/* Quick Action Buttons (ตรวจนับสต็อก, นำเข้า Excel, เบิกยา QR) จัดวางด้านบน ไม่เบียดแถบค้นหา */}
+          {/* Quick Action Buttons (ตรวจนับสต็อก, นำเข้า Excel, เบิกยา QR) */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             {onNavigateToCount && (
               <button
