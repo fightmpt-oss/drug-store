@@ -80,13 +80,29 @@ app.use((req, res) => {
   }
 });
 
+// เปิดเบราว์เซอร์ไปยังหน้าระบบ (ใช้เมื่อสั่งรันด้วย --open จาก 1-START.bat / shortcut)
+const SHOULD_OPEN_BROWSER = process.argv.includes('--open');
+function openBrowser(url) {
+  try {
+    const { spawn } = require('child_process');
+    if (process.platform === 'win32') {
+      spawn('cmd.exe', ['/c', 'start', '""', url], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    } else {
+      spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+    }
+  } catch (e) {
+    console.error('[OPEN BROWSER] ไม่สามารถเปิดเบราว์เซอร์อัตโนมัติ:', e.message);
+  }
+}
+
 // Start server
 async function start() {
   // สร้างโฟลเดอร์สำหรับเก็บไฟล์ข้อมูลและ backup อัตโนมัติ (รองรับการติดตั้งที่หน่วยบริการอื่น)
   const folderPaths = initAllFolders();
 
   await initPool();
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
+    if (SHOULD_OPEN_BROWSER) openBrowser(`http://localhost:${PORT}`);
     const cfg = getConfig();
     const lanAddrs = getLanAddresses(PORT);
     console.log(`=======================================================`);
@@ -103,6 +119,34 @@ async function start() {
     console.log(` 📁 โฟลเดอร์ Drug Catalogue: ${folderPaths.catalogueDir}`);
     console.log(` 📡 โหมด: ${getMode()} | หน่วยบริการ: ${cfg.pcucode || 'ยังไม่ระบุ'} ${cfg.pcuname || ''}`);
     console.log(`=======================================================`);
+  });
+
+  // ถ้าพอร์ตถูกใช้อยู่แล้ว (เช่น เปิดระบบซ้ำ) — ถ้าเป็นระบบคลังยาเดิม ให้เปิดเบราว์เซอร์ไปหน้าเดิมแล้วจบ
+  server.on('error', (err) => {
+    if (err.code !== 'EADDRINUSE') {
+      console.error('[SERVER ERROR]', err.message);
+      process.exit(1);
+    }
+    const http = require('http');
+    const req = http.get({ host: '127.0.0.1', port: PORT, path: '/api/health', timeout: 2000 }, (res) => {
+      let body = '';
+      res.on('data', c => { body += c; });
+      res.on('end', () => {
+        if (res.statusCode === 200 && body.includes('JHCIS Drug Stock')) {
+          console.log(` ℹ️  ระบบคลังยาทำงานอยู่แล้วที่พอร์ต ${PORT} — เปิดหน้าเว็บเดิม`);
+          if (SHOULD_OPEN_BROWSER) openBrowser(`http://localhost:${PORT}`);
+          setTimeout(() => process.exit(0), 1500);
+        } else {
+          console.error(` ❌ พอร์ต ${PORT} ถูกใช้งานโดยโปรแกรมอื่น — กรุณาปิดโปรแกรมนั้น หรือกำหนด PORT ใหม่`);
+          process.exit(1);
+        }
+      });
+    });
+    req.on('error', () => {
+      console.error(` ❌ พอร์ต ${PORT} ถูกใช้งานโดยโปรแกรมอื่น — กรุณาปิดโปรแกรมนั้น หรือกำหนด PORT ใหม่`);
+      process.exit(1);
+    });
+    req.on('timeout', () => req.destroy());
   });
 }
 
