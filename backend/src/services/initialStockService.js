@@ -260,7 +260,7 @@ const HOSPITAL_06020_SEED_ALIASES = {
   'มะขามป้อมน้ำแก้ไอ 60 ml. (ขวด)': '420000001540000094711170',
   'รางจืดแคปซูล (cap)': '420000007839140020182758',
   'หญ้าหนวดแมวชาชง (sac)': '410000000649200334182750',
-  'มะแว้ง (sac)': '420000003969120021582750'
+  'มะแว้ง (sac)': '420000003969120020382755'
 };
 
 function parseExpiryDate(rawExp) {
@@ -790,7 +790,7 @@ async function commitExcelInitialStock(items, options = {}, actor = 'เจ้�
   // 1. Reset old stock counts if requested
   let resetPerformed = false;
   if (resetBeforeCommit) {
-    resetStockCounts(actor);
+    await resetStockCounts(actor);
     resetPerformed = true;
   }
 

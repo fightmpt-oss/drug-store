@@ -338,8 +338,15 @@ function deleteStockCount(drugcode, actor) {
 
 function resetStockCounts(actor) {
   return countsStore.update(all => {
-    countsAuditStore.update(h => { h.push({ ts: new Date().toISOString(), by: actor || '-', action: 'RESET_ALL', affectedItems: Object.keys(all).length }); return h; });
-    return {};
+    const keys = Object.keys(all);
+    const affectedItems = keys.length;
+    keys.forEach(k => delete all[k]);
+    countsAuditStore.update(h => {
+      h.push({ ts: new Date().toISOString(), by: actor || '-', action: 'RESET_ALL', affectedItems });
+      if (h.length > 5000) h.splice(0, h.length - 5000);
+      return h;
+    });
+    return { affectedItems };
   });
 }
 
