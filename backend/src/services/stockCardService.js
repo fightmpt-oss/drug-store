@@ -12,7 +12,7 @@
 //  5) รายการปรับปรุง (ตัดจำหน่าย/โอนย้าย/คืนยา) นับเป็นธุรกรรมในบัญชีคุมด้วย
 
 const { getPool, isLive, isDemo, memoryStore, getConfig, assertDataAvailable, getSchemaStatus } = require('../config/db');
-const { getAllJhcisDrugs } = require('./matcherService');
+const { getAllJhcisDrugs, inferLocalUnit } = require('./matcherService');
 const {
   getStockCounts, getStockCount, findReceipts, listAdjustments, itemDispenseUnits, getDrugSettings,
   listSubstockTransfers
@@ -325,6 +325,84 @@ function consolidateLots(lotsArr) {
   });
 }
 
+// รวมรายการยาจาก JHCIS + รายการเฉพาะคลังยาในที่ไม่ได้ผูก JHCIS (เช่น น้ำยาฆ่าเชื้อ/ล้างเครื่องมือ)
+async function getAllDrugsWithLocal() {
+  const jhcisDrugs = await getAllJhcisDrugs();
+  const existingCodes = new Set(jhcisDrugs.map(d => String(d.drugcode).trim()));
+  const virtualMap = new Map();
+
+  const allReceipts = findReceipts({});
+  for (const r of allReceipts) {
+    for (const it of (r.items || [])) {
+      const code = String(it.drugcode || '').trim();
+      if (!code || existingCodes.has(code)) continue;
+      const isLocal = Boolean(it.isLocalOnly) || code.startsWith('LOCAL-');
+      if (!isLocal) continue;
+      const prev = virtualMap.get(code);
+      virtualMap.set(code, {
+        drugcode: code,
+        drugname: it.drugname || prev?.drugname || code,
+        druggenericname: '',
+        drugnamethai: 'เฉพาะคลังยาใน (ไม่ผูก JHCIS)',
+        drugtype: '03',
+        drugtypesub: '',
+        drugflag: '1',
+        drugunit: it.localUnit || prev?.drugunit || inferLocalUnit(it.drugname),
+        unitpacking: '',
+        costprice: Number(it.costprice) || prev?.costprice || 0,
+        sellprice: 0,
+        tmtcode: '',
+        drugcode24: '',
+        didstandard: it.tmtid || '',
+        chargeitem: '',
+        chargeopdname: '',
+        drugcaution: '',
+        antibio: '2',
+        toothtype: '',
+        lotno: it.lotno || '',
+        dateexpire: it.dateexpire || null,
+        daystockremain: 30,
+        isLocalOnly: true
+      });
+    }
+  }
+
+  const allCounts = getStockCounts();
+  for (const [rawCode, cnt] of Object.entries(allCounts || {})) {
+    const code = String(rawCode || '').trim();
+    if (!code || existingCodes.has(code) || virtualMap.has(code)) continue;
+    if (!code.startsWith('LOCAL-') && !cnt.isLocalOnly) continue;
+    const firstLot = (cnt.lots && cnt.lots[0]) || {};
+    virtualMap.set(code, {
+      drugcode: code,
+      drugname: cnt.drugname || code,
+      druggenericname: '',
+      drugnamethai: 'เฉพาะคลังยาใน (ไม่ผูก JHCIS)',
+      drugtype: '03',
+      drugtypesub: '',
+      drugflag: '1',
+      drugunit: cnt.localUnit || inferLocalUnit(cnt.drugname),
+      unitpacking: '',
+      costprice: Number(firstLot.costprice) || 0,
+      sellprice: 0,
+      tmtcode: '',
+      drugcode24: '',
+      didstandard: '',
+      chargeitem: '',
+      chargeopdname: '',
+      drugcaution: '',
+      antibio: '2',
+      toothtype: '',
+      lotno: firstLot.lotno || '',
+      dateexpire: firstLot.dateexpire || null,
+      daystockremain: 30,
+      isLocalOnly: true
+    });
+  }
+
+  return virtualMap.size > 0 ? [...jhcisDrugs, ...virtualMap.values()] : jhcisDrugs;
+}
+
 // ---------- Stock Overview ----------
 async function getDrugStockSummary(filters = {}) {
   assertDataAvailable('แดชบอร์ดสต็อกยา');
@@ -343,7 +421,7 @@ async function getDrugStockSummary(filters = {}) {
     colFilters = {}
   } = filters;
 
-  const drugs = await getAllJhcisDrugs();
+  const drugs = await getAllDrugsWithLocal();
   const today = new Date().toISOString().slice(0, 10);
 
   const dispenseMap = await fetchDispenseDayMap(startDate, endDate);
@@ -578,6 +656,7 @@ async function getDrugStockSummary(filters = {}) {
       conversionFactor: factor,
       hasSubstockTransfers: totalTransferredToCounter > 0,
       currentBalance,
+      isLocalOnly: Boolean(drug.isLocalOnly),
       hosdrugcode: savedMap?.hosdrugcode || receiptRowsInWindow[0]?.hosdrugcode || '',
       hospitalDrugName: savedMap?.hospitalDrugName || savedMap?.drugname || '',
       amc,
@@ -823,7 +902,7 @@ async function getStockCardDetail(drugcode, startDate, endDate, mode = 'main_sto
     throw err;
   }
 
-  const drugs = await getAllJhcisDrugs();
+  const drugs = await getAllDrugsWithLocal();
   const drug = drugs.find(d => d.drugcode === drugcode);
   if (!drug) {
     const err = new Error(`ไม่พบรหัสยา ${drugcode}`);
@@ -1130,10 +1209,10 @@ async function getDrugSubstockInfo(codeOrQr, startDate, endDate) {
     } catch (e) {}
   }
 
-  const drugs = await getAllJhcisDrugs();
+  const drugs = await getAllDrugsWithLocal();
   const mappings = memoryStore.drugMappings || [];
 
-  // 1. ค้นหาจาก drugcode ใน JHCIS
+  // 1. ค้นหาจาก drugcode ใน JHCIS หรือรายการเฉพาะคลังยาใน
   let targetDrug = drugs.find(d => String(d.drugcode).trim().toLowerCase() === cleanCode.toLowerCase());
 
   // 2. ถ้าไม่พบ ให้ค้นหาจาก hosdrugcode หรือชื่อยาในตาราง mapping

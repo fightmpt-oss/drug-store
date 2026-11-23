@@ -67,7 +67,11 @@ function normalizeReceiptItem(it, idx) {
     dateexpire: it.dateexpire && String(it.dateexpire).trim() !== '' ? String(it.dateexpire).trim() : null, // ห้ามสมมุติวันหมดอายุ
     amount: Math.max(0, Number(it.amount) || 0),
     unitType,           // 'dispense' = หน่วยจ่ายจริง | 'pack' = หน่วยบรรจุ
-    packSize,           // จำนวนหน่วยจ่ายต่อ 1 หน่วยบรรจุ (ถ้ารับเป็น pack)
+    packSize,           // จำนวนหน่วยจ่ายต่อ 1 หน่วยบรรจุ (ข้อมูลอ้างอิง)
+    issuedQty: Number(it.issuedQty) > 0 ? Number(it.issuedQty) : null,
+    countByPack: Boolean(it.countByPack),
+    isLocalOnly: Boolean(it.isLocalOnly),
+    localUnit: String(it.localUnit || '').trim(),
     costprice: Math.max(0, Number(it.costprice) || 0),
     matchType: it.matchType || '',
     confidence: Number(it.confidence) || 0

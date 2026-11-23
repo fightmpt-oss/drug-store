@@ -9,7 +9,7 @@ const { parsePdfBuffer } = require('../services/pdfReceiptParser');
 const { matchExcelItems } = require('../services/matcherService');
 const { commitStockReceipt, checkDuplicateReceiveno } = require('../services/jhcisSyncService');
 const { requireAuth } = require('../middleware/auth');
-const { getConfig, memoryStore, saveMappings } = require('../config/db');
+const { getConfig, memoryStore, saveMappings, getPcuCode } = require('../config/db');
 
 // โฟลเดอร์เก็บไฟล์เอกสารใบรับยาต้นฉบับจาก รพ.แม่ข่าย (แยก PDF และ Excel ชัดเจนในโฟลเดอร์ระบบ)
 const RECEIVED_DOCS_DIR = path.resolve(__dirname, '../../../received_documents');
@@ -52,6 +52,14 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 } // 20 MB limit (รองรับไฟล์ PDF และ Excel)
 });
 
+function normalizeDrugKey(str) {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .replace(/[^a-z0-9ก-๙]/g, '')
+    .trim();
+}
+
 // Upload and preview Excel or PDF file
 router.post('/preview', upload.single('file'), async (req, res) => {
   try {
@@ -89,7 +97,7 @@ router.post('/preview', upload.single('file'), async (req, res) => {
     if (isPdf) {
       parsed = await parsePdfBuffer(req.file.buffer);
     } else {
-      parsed = parseExcelBuffer(req.file.buffer);
+      parsed = parseExcelBuffer(req.file.buffer, originalName);
     }
 
     // 3. Perform 3-tier matching against JHCIS cdrug and TMT 24 digits
@@ -156,26 +164,20 @@ router.post('/import', async (req, res) => {
       items
     });
 
-function normalizeDrugKey(str) {
-  if (!str) return '';
-  return String(str)
-    .toLowerCase()
-    .replace(/[^a-z0-9ก-๙]/g, '')
-    .trim();
-}
-
     // บันทึกความจำการจับคู่ยา (Hospital Alias Memory) เพื่อให้งวดถัดไปจับคู่อัตโนมัติ 1 คลิก
     if (items && Array.isArray(items)) {
+      const currentPcu = getPcuCode() || '';
       let updated = false;
       for (const it of items) {
         const drugCode = String(it.drugcode || it.matchedDrugCode || '').trim();
-        const rawName = (it.drugname || it.hospitalDrugName || '').trim();
+        const rawName = (it.hospitalDrugName || it.drugname || '').trim();
         const hosCode = (it.hosdrugcode || '').trim();
         const normName = normalizeDrugKey(rawName);
         const normHosCode = hosCode.toLowerCase();
 
         if (drugCode && (normName || normHosCode)) {
           let existing = memoryStore.drugMappings.find(m => {
+            if (m.pcucode && currentPcu && m.pcucode !== currentPcu) return false;
             if (normHosCode && m.hosdrugcode && m.hosdrugcode.toLowerCase() === normHosCode) return true;
             const mNorm = normalizeDrugKey(m.hospitalDrugName || m.drugname);
             if (normName && mNorm && mNorm === normName) return true;
@@ -183,16 +185,19 @@ function normalizeDrugKey(str) {
           });
 
           if (existing) {
-            if (existing.jhcisdrugcode !== drugCode || !existing.matchedDrugName) {
-              existing.jhcisdrugcode = drugCode;
-              existing.matchedDrugCode = drugCode;
-              if (it.matchedDrugName) existing.matchedDrugName = it.matchedDrugName;
-              existing.updatedAt = new Date().toISOString();
-              updated = true;
-            }
+            existing.pcucode = currentPcu;
+            existing.jhcisdrugcode = drugCode;
+            existing.matchedDrugCode = drugCode;
+            if (it.matchedDrugName) existing.matchedDrugName = it.matchedDrugName;
+            existing.countByPack = Boolean(it.countByPack);
+            existing.isLocalOnly = Boolean(it.isLocalOnly);
+            if (it.localUnit) existing.localUnit = it.localUnit;
+            existing.updatedAt = new Date().toISOString();
+            updated = true;
           } else {
             memoryStore.drugMappings.push({
               id: `map_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              pcucode: currentPcu,
               hospitalDrugName: rawName,
               drugname: rawName,
               hosdrugcode: hosCode,
@@ -200,6 +205,9 @@ function normalizeDrugKey(str) {
               matchedDrugCode: drugCode,
               matchedDrugName: it.matchedDrugName || it.drugname || '',
               tmtid: it.tmtid || '',
+              countByPack: Boolean(it.countByPack),
+              isLocalOnly: Boolean(it.isLocalOnly),
+              localUnit: it.localUnit || '',
               createdAt: new Date().toISOString()
             });
             updated = true;
@@ -221,10 +229,11 @@ function normalizeDrugKey(str) {
 // บันทึก/อัปเดตการจับคู่ชื่อยา รพ.แม่ข่าย โดยตรง (Hospital Alias Memory)
 router.post('/save-mapping', (req, res) => {
   try {
-    const { hospitalDrugName, drugname, hosdrugcode, jhcisdrugcode, matchedDrugName, tmtid } = req.body;
+    const { hospitalDrugName, drugname, hosdrugcode, jhcisdrugcode, matchedDrugName, tmtid, countByPack, isLocalOnly, localUnit } = req.body;
     const cleanName = (hospitalDrugName || drugname || '').trim();
     const cleanCode = (hosdrugcode || '').trim();
     const cleanJhcis = String(jhcisdrugcode || '').trim();
+    const currentPcu = getPcuCode() || '';
 
     if (!cleanJhcis || (!cleanName && !cleanCode)) {
       return res.status(400).json({ success: false, message: 'ข้อมูลไม่ครบถ้วน: ต้องระบุรหัสยา JHCIS และชื่อยาหรือรหัสยา รพ.' });
@@ -234,6 +243,7 @@ router.post('/save-mapping', (req, res) => {
     const normHosCode = cleanCode.toLowerCase();
 
     let existing = memoryStore.drugMappings.find(m => {
+      if (m.pcucode && currentPcu && m.pcucode !== currentPcu) return false;
       if (normHosCode && m.hosdrugcode && m.hosdrugcode.toLowerCase() === normHosCode) return true;
       const mNorm = normalizeDrugKey(m.hospitalDrugName || m.drugname);
       if (normName && mNorm && mNorm === normName) return true;
@@ -241,6 +251,7 @@ router.post('/save-mapping', (req, res) => {
     });
 
     if (existing) {
+      existing.pcucode = currentPcu;
       existing.jhcisdrugcode = cleanJhcis;
       existing.matchedDrugCode = cleanJhcis;
       if (cleanName) {
@@ -249,10 +260,14 @@ router.post('/save-mapping', (req, res) => {
       }
       if (matchedDrugName) existing.matchedDrugName = matchedDrugName;
       if (tmtid) existing.tmtid = tmtid;
+      if (countByPack !== undefined) existing.countByPack = Boolean(countByPack);
+      if (isLocalOnly !== undefined) existing.isLocalOnly = Boolean(isLocalOnly);
+      if (localUnit !== undefined) existing.localUnit = localUnit || '';
       existing.updatedAt = new Date().toISOString();
     } else {
       memoryStore.drugMappings.push({
         id: `map_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        pcucode: currentPcu,
         hospitalDrugName: cleanName,
         drugname: cleanName,
         hosdrugcode: cleanCode,
@@ -260,6 +275,9 @@ router.post('/save-mapping', (req, res) => {
         matchedDrugCode: cleanJhcis,
         matchedDrugName: matchedDrugName || '',
         tmtid: tmtid || '',
+        countByPack: Boolean(countByPack),
+        isLocalOnly: Boolean(isLocalOnly),
+        localUnit: localUnit || '',
         createdAt: new Date().toISOString()
       });
     }

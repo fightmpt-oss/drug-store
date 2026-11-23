@@ -158,13 +158,27 @@ export default function ExcelImportView({ onImportSuccess }) {
     const prevItem = updatedItems[index];
     const found = allDrugs.find(d => d.drugcode === newDrugCode);
 
+    const autoPackUnit = found && prevItem.issuedQty > 0 && prevItem.packSize > 1 && (
+      found.drugunit === 'แผง' || (found.drugname || '').includes('ถุงชาเล็ก')
+    );
+    const nextCountByPack = autoPackUnit ? true : Boolean(prevItem.countByPack);
+    const nextAmount = (prevItem.issuedQty > 0 && prevItem.packSize > 1)
+      ? (nextCountByPack ? prevItem.issuedQty : prevItem.issuedQty * prevItem.packSize)
+      : prevItem.amount;
+    const nextCost = (prevItem.issuedQty > 0 && prevItem.packSize > 1 && prevItem.pricePerPack > 0)
+      ? (nextCountByPack ? prevItem.pricePerPack : Number((prevItem.pricePerPack / prevItem.packSize).toFixed(4)))
+      : (prevItem.cost || (found ? Number(found.costprice || 0) : 0));
+
     updatedItems[index] = {
       ...prevItem,
+      isLocalOnly: false,
+      countByPack: nextCountByPack,
+      amount: nextAmount,
+      cost: nextCost,
       matchedDrugCode: newDrugCode,
       matchedDrugName: found ? found.drugname : '',
       matchedDrugUnit: found ? found.drugunit : '',
       drugname: prevItem.drugname || (found ? found.drugname : ''),
-      cost: prevItem.cost || (found ? Number(found.costprice || 0) : 0),
       matchStatus: newDrugCode ? 'MATCHED' : 'UNMATCHED',
       matchType: newDrugCode ? 'MANUAL_SELECTED (ผู้ใช้เลือกเอง - บันทึกจำค่าแล้ว)' : '',
       confidence: newDrugCode ? 100 : 0,
@@ -187,8 +201,99 @@ export default function ExcelImportView({ onImportSuccess }) {
         hosdrugcode: prevItem.hosdrugcode || '',
         jhcisdrugcode: newDrugCode,
         matchedDrugName: found ? found.drugname : '',
-        tmtid: found?.didstandard || prevItem.tmtid || ''
+        tmtid: found?.didstandard || prevItem.tmtid || '',
+        countByPack: nextCountByPack,
+        isLocalOnly: false
       }).catch(err => console.warn('Could not auto-save mapping:', err.message));
+    }
+  };
+
+  const handleToggleLocalOnly = (index) => {
+    if (!previewData) return;
+    const updatedItems = [...previewData.items];
+    const prevItem = updatedItems[index];
+    const cleanHos = String(prevItem.hosdrugcode || '').trim();
+    const localCode = cleanHos ? `LOCAL-${cleanHos}` : `LOCAL-ITEM-${index + 1}`;
+    const rawLower = String(prevItem.drugname || '').toLowerCase();
+    const inferredUnit = prevItem.localUnit || (
+      rawLower.includes('5l') || rawLower.includes('5 l') || rawLower.includes('แกลลอน')
+        ? 'แกลลอน'
+        : rawLower.includes('ml') || rawLower.includes('ขวด')
+        ? 'ขวด'
+        : 'หน่วย'
+    );
+
+    updatedItems[index] = {
+      ...prevItem,
+      isLocalOnly: true,
+      matchedDrugCode: localCode,
+      matchedDrugName: prevItem.drugname || localCode,
+      matchedDrugUnit: inferredUnit,
+      matchStatus: 'MATCHED',
+      matchType: 'LOCAL_ONLY (เฉพาะคลังยาใน ไม่ผูก JHCIS)',
+      confidence: 100,
+      isAutoSaved: true
+    };
+
+    const st = recomputeStats(updatedItems);
+    setPreviewData({
+      ...previewData,
+      totalItems: st.total,
+      stats: st,
+      items: updatedItems
+    });
+
+    if (prevItem.drugname || prevItem.hosdrugcode) {
+      api.saveMapping({
+        hospitalDrugName: prevItem.drugname,
+        drugname: prevItem.drugname,
+        hosdrugcode: prevItem.hosdrugcode || '',
+        jhcisdrugcode: localCode,
+        matchedDrugName: prevItem.drugname || localCode,
+        isLocalOnly: true,
+        localUnit: inferredUnit,
+        countByPack: Boolean(prevItem.countByPack)
+      }).catch(err => console.warn('Could not auto-save local-only mapping:', err.message));
+    }
+  };
+
+  const handleToggleCountByPack = (index) => {
+    if (!previewData) return;
+    const updatedItems = [...previewData.items];
+    const prevItem = updatedItems[index];
+    if (!(prevItem.issuedQty > 0 && prevItem.packSize > 1)) return;
+
+    const nextCountByPack = !prevItem.countByPack;
+    const nextAmount = nextCountByPack
+      ? prevItem.issuedQty
+      : prevItem.issuedQty * prevItem.packSize;
+    const nextCost = prevItem.pricePerPack > 0
+      ? (nextCountByPack ? prevItem.pricePerPack : Number((prevItem.pricePerPack / prevItem.packSize).toFixed(4)))
+      : prevItem.cost;
+
+    updatedItems[index] = {
+      ...prevItem,
+      countByPack: nextCountByPack,
+      amount: nextAmount,
+      cost: nextCost
+    };
+
+    setPreviewData({
+      ...previewData,
+      items: updatedItems
+    });
+
+    if (prevItem.matchedDrugCode && (prevItem.drugname || prevItem.hosdrugcode)) {
+      api.saveMapping({
+        hospitalDrugName: prevItem.drugname,
+        drugname: prevItem.drugname,
+        hosdrugcode: prevItem.hosdrugcode || '',
+        jhcisdrugcode: prevItem.matchedDrugCode,
+        matchedDrugName: prevItem.matchedDrugName || '',
+        countByPack: nextCountByPack,
+        isLocalOnly: Boolean(prevItem.isLocalOnly),
+        localUnit: prevItem.matchedDrugUnit || ''
+      }).catch(err => console.warn('Could not save countByPack preference:', err.message));
     }
   };
 
@@ -362,6 +467,12 @@ export default function ExcelImportView({ onImportSuccess }) {
           lotno: i.lot,
           dateexpire: i.expdate,
           amount: Number(i.amount) || 0,
+          unitType: 'dispense',
+          packSize: i.packSize || null,
+          issuedQty: i.issuedQty || null,
+          countByPack: Boolean(i.countByPack),
+          isLocalOnly: Boolean(i.isLocalOnly),
+          localUnit: i.matchedDrugUnit || '',
           costprice: Number(i.cost) || 0,
           matchType: i.matchType,
           confidence: i.confidence
@@ -816,26 +927,44 @@ export default function ExcelImportView({ onImportSuccess }) {
                           {/* Match Cell: Ultra-fast responsive cell (NO 940,000 DOM options) */}
                           <td className="py-2.5 px-2.5">
                             {item.matchedDrugCode ? (
-                              <div className="flex items-center justify-between gap-1.5 p-1.5 bg-emerald-50/80 border border-emerald-300 rounded-lg">
+                              <div className={`flex items-center justify-between gap-1.5 p-1.5 rounded-lg border ${
+                                item.isLocalOnly
+                                  ? 'bg-indigo-50/80 border-indigo-300'
+                                  : 'bg-emerald-50/80 border-emerald-300'
+                              }`}>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1">
-                                    <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded">
+                                    <span className={`font-mono text-[11px] font-bold px-1 py-0.5 rounded ${
+                                      item.isLocalOnly
+                                        ? 'text-indigo-800 bg-indigo-100'
+                                        : 'text-emerald-800 bg-emerald-100'
+                                    }`}>
                                       [{item.matchedDrugCode}]
                                     </span>
-                                    <span className="text-xs font-semibold text-emerald-950 truncate block" title={item.matchedDrugName}>
-                                      {item.matchedDrugName || allDrugs.find(d => d.drugcode === item.matchedDrugCode)?.drugname || ''}
+                                    <span className={`text-xs font-semibold truncate block ${
+                                      item.isLocalOnly ? 'text-indigo-950' : 'text-emerald-950'
+                                    }`} title={item.matchedDrugName}>
+                                      {item.isLocalOnly
+                                        ? 'เฉพาะคลังยาใน (ไม่ผูก JHCIS)'
+                                        : (item.matchedDrugName || allDrugs.find(d => d.drugcode === item.matchedDrugCode)?.drugname || '')}
                                     </span>
                                   </div>
                                   {item.matchedDrugUnit && (
-                                    <div className="text-[10px] text-emerald-700 mt-0.5">หน่วยนับ: {item.matchedDrugUnit}</div>
+                                    <div className={`text-[10px] mt-0.5 ${item.isLocalOnly ? 'text-indigo-700' : 'text-emerald-700'}`}>
+                                      หน่วยนับ: {item.matchedDrugUnit}
+                                    </div>
                                   )}
                                 </div>
                                 <button
                                   type="button"
                                   onClick={() => openDrugPicker(idx, item.drugname)}
-                                  className="px-2 py-1 text-[11px] font-semibold bg-white text-emerald-700 hover:bg-emerald-100 border border-emerald-300 rounded shadow-2xs shrink-0 cursor-pointer transition-colors"
+                                  className={`px-2 py-1 text-[11px] font-semibold bg-white border rounded shadow-2xs shrink-0 cursor-pointer transition-colors ${
+                                    item.isLocalOnly
+                                      ? 'text-indigo-700 hover:bg-indigo-100 border-indigo-300'
+                                      : 'text-emerald-700 hover:bg-emerald-100 border-emerald-300'
+                                  }`}
                                 >
-                                  เปลี่ยน
+                                  {item.isLocalOnly ? 'ผูก JHCIS' : 'เปลี่ยน'}
                                 </button>
                               </div>
                             ) : isSuggested && item.suggestions && item.suggestions.length > 0 ? (
@@ -862,24 +991,44 @@ export default function ExcelImportView({ onImportSuccess }) {
                                     </button>
                                   ))}
                                 </div>
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => openDrugPicker(idx, item.drugname)}
+                                    className="flex-1 py-1 px-2 text-[11px] font-medium bg-white hover:bg-slate-50 text-slate-600 hover:text-indigo-600 border border-slate-300 hover:border-indigo-300 rounded-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    <Search className="w-3 h-3 text-slate-400" />
+                                    <span>ค้นหายา JHCIS...</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleLocalOnly(idx)}
+                                    className="py-1 px-2 text-[11px] font-medium bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-md cursor-pointer transition-colors whitespace-nowrap"
+                                    title="นำเข้าเฉพาะคลังยาใน โดยไม่ต้องผูกกับทะเบียนยา JHCIS"
+                                  >
+                                    ไม่ผูก JHCIS
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
                                 <button
                                   type="button"
                                   onClick={() => openDrugPicker(idx, item.drugname)}
-                                  className="w-full py-1 px-2 text-[11px] font-medium bg-white hover:bg-slate-50 text-slate-600 hover:text-indigo-600 border border-slate-300 hover:border-indigo-300 rounded-md flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                  className="w-full py-1.5 px-2.5 text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 hover:border-rose-400 rounded-lg flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
                                 >
-                                  <Search className="w-3 h-3 text-slate-400" />
-                                  <span>ค้นหายาอื่นใน JHCIS...</span>
+                                  <Search className="w-3.5 h-3.5 text-rose-500" />
+                                  <span>เลือกรหัสยาใน JHCIS...</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleLocalOnly(idx)}
+                                  className="w-full py-1 px-2 text-[11px] font-medium bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-md cursor-pointer transition-colors"
+                                  title="นำเข้าเฉพาะคลังยาใน เช่น น้ำยาล้างเครื่องมือ โดยไม่ผูก JHCIS"
+                                >
+                                  เก็บเฉพาะคลังยาใน (ไม่ผูก JHCIS)
                                 </button>
                               </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => openDrugPicker(idx, item.drugname)}
-                                className="w-full py-2 px-2.5 text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 hover:border-rose-400 rounded-lg flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
-                              >
-                                <Search className="w-3.5 h-3.5 text-rose-500" />
-                                <span>เลือกรหัสยาใน JHCIS...</span>
-                              </button>
                             )}
                           </td>
 
@@ -911,6 +1060,22 @@ export default function ExcelImportView({ onImportSuccess }) {
                               onChange={(e) => handleItemFieldChange(idx, 'amount', e.target.value)}
                               className="w-24 px-2 py-1 border border-emerald-300 rounded text-right font-bold text-emerald-800 font-mono text-xs bg-emerald-50/30"
                             />
+                            {item.issuedQty > 0 && item.packSize > 1 && (
+                              <div className="mt-1 flex flex-col items-end gap-0.5 text-[10px]">
+                                <span className={item.countByPack ? 'text-indigo-700 font-semibold' : 'text-slate-500'}>
+                                  {item.countByPack
+                                    ? `รับเป็นแพ็ค (${item.issuedQty} ${item.matchedDrugUnit || 'แผง/ห่อ'})`
+                                    : `จ่าย ${item.issuedQty} × ${item.packSize}`}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCountByPack(idx)}
+                                  className="text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                                >
+                                  {item.countByPack ? `คูณ ×${item.packSize}` : 'นับเป็นแพ็ค/แผง'}
+                                </button>
+                              </div>
+                            )}
                           </td>
 
                           <td className="py-2.5 px-2.5 text-right">

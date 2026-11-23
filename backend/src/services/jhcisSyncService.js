@@ -43,6 +43,10 @@ async function commitStockReceipt(receiptData = {}) {
       amount: it.amount,
       unitType: it.unitType,
       packSize: it.packSize,
+      issuedQty: it.issuedQty,
+      countByPack: Boolean(it.countByPack),
+      isLocalOnly: Boolean(it.isLocalOnly),
+      localUnit: it.localUnit || '',
       costprice: it.costprice,
       matchType: it.matchType,
       confidence: it.confidence
