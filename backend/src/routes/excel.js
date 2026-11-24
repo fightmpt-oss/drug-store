@@ -8,7 +8,7 @@ const { parseExcelBuffer } = require('../services/excelParser');
 const { parsePdfBuffer } = require('../services/pdfReceiptParser');
 const { matchExcelItems } = require('../services/matcherService');
 const { commitStockReceipt, checkDuplicateReceiveno } = require('../services/jhcisSyncService');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getConfig, memoryStore, saveMappings, getPcuCode } = require('../config/db');
 
 // โฟลเดอร์เก็บไฟล์เอกสารใบรับยาต้นฉบับจาก รพ.แม่ข่าย (แยก PDF และ Excel ชัดเจนในโฟลเดอร์ระบบ)
@@ -302,6 +302,16 @@ router.get('/receipts', (req, res) => {
   }
 });
 
+const ALLOWED_DOC_EXTS = {
+  pdf: new Set(['.pdf']),
+  excel: new Set(['.xlsx', '.xls', '.csv'])
+};
+
+function isAllowedDocFile(type, filename) {
+  const ext = path.extname(String(filename || '')).toLowerCase();
+  return Boolean(ALLOWED_DOC_EXTS[type] && ALLOWED_DOC_EXTS[type].has(ext));
+}
+
 // รายชื่อไฟล์เอกสารใบรับยา (PDF / Excel) ที่เก็บไว้ในโฟลเดอร์ received_documents
 router.get('/files', (req, res) => {
   try {
@@ -309,16 +319,18 @@ router.get('/files', (req, res) => {
     const listFolder = (dir, type) => {
       if (!fs.existsSync(dir)) return [];
       return fs.readdirSync(dir)
-        .filter(f => !f.startsWith('.'))
+        .filter(f => !f.startsWith('.') && isAllowedDocFile(type, f))
         .map(f => {
           const stat = fs.statSync(path.join(dir, f));
+          if (!stat.isFile()) return null;
           return {
             filename: f,
             type,
             size: stat.size,
             updatedAt: stat.mtime
           };
-        });
+        })
+        .filter(Boolean);
     };
 
     const files = [
@@ -333,6 +345,29 @@ router.get('/files', (req, res) => {
       excelFolderPath: EXCEL_DOCS_DIR,
       files
     });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ลบไฟล์เอกสารใบรับยาต้นฉบับ (Admin เท่านั้น — ไม่กระทบยอดสต็อกหรือประวัติ receipts.json)
+router.delete('/files/:type/:filename', requireAdmin, (req, res) => {
+  try {
+    const type = req.params.type === 'pdf' ? 'pdf' : (req.params.type === 'excel' ? 'excel' : null);
+    if (!type) {
+      return res.status(400).json({ success: false, message: 'ประเภทไฟล์ไม่ถูกต้อง (ต้องเป็น pdf หรือ excel)' });
+    }
+    const baseDir = type === 'pdf' ? PDF_DOCS_DIR : EXCEL_DOCS_DIR;
+    const safeName = path.basename(String(req.params.filename || ''));
+    if (!safeName || !isAllowedDocFile(type, safeName)) {
+      return res.status(400).json({ success: false, message: 'ไม่อนุญาตให้ลบไฟล์ประเภทนี้ (รองรับเฉพาะไฟล์เอกสาร .pdf / .xlsx / .xls / .csv)' });
+    }
+    const fullPath = path.join(baseDir, safeName);
+    if (!fs.existsSync(fullPath)) {
+      return res.status(404).json({ success: false, message: 'ไม่พบไฟล์เอกสารที่ระบุ' });
+    }
+    fs.unlinkSync(fullPath);
+    res.json({ success: true, message: `ลบไฟล์เอกสาร "${safeName}" เรียบร้อยแล้ว` });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

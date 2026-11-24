@@ -36,6 +36,38 @@ export default function ExcelImportView({ onImportSuccess }) {
   // Saved receipts & document folder info
   const [recentReceipts, setRecentReceipts] = useState([]);
   const [savedFilesInfo, setSavedFilesInfo] = useState({ folderPath: '', files: [] });
+  const [deletingFileKey, setDeletingFileKey] = useState(null);
+  const isAdmin = (() => {
+    try {
+      const u = JSON.parse(localStorage.getItem('jhcis_user') || 'null');
+      return u?.role === 'admin';
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  const handleDeleteSavedFile = async (f) => {
+    if (!isAdmin || !f?.filename) return;
+    const confirmed = window.confirm(
+      `ยืนยันลบไฟล์ต้นฉบับ "${f.filename}" ออกจากโฟลเดอร์ระบบหรือไม่?\n\n(การลบไฟล์เอกสารนี้ไม่กระทบต่อยอดสต็อกยาและประวัติใบรับยาในระบบ)`
+    );
+    if (!confirmed) return;
+    const key = `${f.type}:${f.filename}`;
+    setDeletingFileKey(key);
+    setError(null);
+    try {
+      const res = await api.deleteReceiptFile(f.type, f.filename);
+      if (res.success) {
+        await loadReceiptsAndFiles();
+      } else {
+        setError(res.message || 'ไม่สามารถลบไฟล์เอกสารได้');
+      }
+    } catch (err) {
+      setError(err.message || 'เกิดข้อผิดพลาดในการลบไฟล์เอกสาร');
+    } finally {
+      setDeletingFileKey(null);
+    }
+  };
 
   // Receipt Header Info — supplier เริ่มต้นจากค่าตั้งของหน่วย (motherHospital) ไม่ hardcode
   const [receiptInfo, setReceiptInfo] = useState({
@@ -1159,26 +1191,51 @@ export default function ExcelImportView({ onImportSuccess }) {
                 ไฟล์เอกสารใบส่งยา (PDF / Excel) ที่เก็บอยู่ในโฟลเดอร์ระบบ ({savedFilesInfo.files.length} ไฟล์):
               </div>
               <div className="flex flex-wrap gap-2">
-                {savedFilesInfo.files.slice(0, 12).map((f, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => api.openReceiptFile(f.type, f.filename).catch(err => setError(err.message))}
-                    className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-colors cursor-pointer ${
-                      f.type === 'pdf'
-                        ? 'bg-rose-50/70 border-rose-200 text-rose-900 hover:bg-rose-100'
-                        : 'bg-emerald-50/70 border-emerald-200 text-emerald-900 hover:bg-emerald-100'
-                    }`}
-                  >
-                    {f.type === 'pdf' ? (
-                      <FileText className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                    ) : (
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    )}
-                    <span className="max-w-[240px] truncate">{f.filename}</span>
-                    <ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
-                  </button>
-                ))}
+                {savedFilesInfo.files.slice(0, 12).map((f, i) => {
+                  const fileKey = `${f.type}:${f.filename}`;
+                  const isDeleting = deletingFileKey === fileKey;
+                  return (
+                    <div
+                      key={fileKey || i}
+                      className={`inline-flex items-center rounded-xl border text-xs font-medium overflow-hidden transition-colors ${
+                        f.type === 'pdf'
+                          ? 'bg-rose-50/70 border-rose-200 text-rose-900'
+                          : 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => api.openReceiptFile(f.type, f.filename).catch(err => setError(err.message))}
+                        className={`inline-flex items-center space-x-1.5 px-3 py-1.5 transition-colors cursor-pointer ${
+                          f.type === 'pdf' ? 'hover:bg-rose-100' : 'hover:bg-emerald-100'
+                        }`}
+                      >
+                        {f.type === 'pdf' ? (
+                          <FileText className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                        ) : (
+                          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        )}
+                        <span className="max-w-[240px] truncate">{f.filename}</span>
+                        <ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
+                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSavedFile(f)}
+                          disabled={isDeleting}
+                          title="ลบไฟล์ต้นฉบับนี้ (ไม่กระทบยอดสต็อก)"
+                          className={`px-2 py-1.5 border-l transition-colors cursor-pointer disabled:opacity-40 ${
+                            f.type === 'pdf'
+                              ? 'border-rose-200 text-rose-500 hover:bg-rose-200/70 hover:text-rose-800'
+                              : 'border-emerald-200 text-emerald-600 hover:bg-rose-100 hover:text-rose-700'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -241,6 +241,13 @@ export const api = {
     return request(`/excel/files`);
   },
 
+  // ลบไฟล์เอกสารต้นฉบับในโฟลเดอร์ received_documents (Admin เท่านั้น — ไม่กระทบยอดสต็อก)
+  async deleteReceiptFile(type, filename) {
+    return request(`/excel/files/${encodeURIComponent(type)}/${encodeURIComponent(filename)}`, {
+      method: 'DELETE'
+    });
+  },
+
   // เปิดดูไฟล์ PDF ในแท็บใหม่ หรือดาวน์โหลดไฟล์ Excel จากโฟลเดอร์ received_documents
   async openReceiptFile(type, filename) {
     const token = getToken();

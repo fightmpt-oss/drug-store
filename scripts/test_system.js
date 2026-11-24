@@ -373,6 +373,18 @@ async function run() {
     staffBackupDl.status === 403 && staffBackupDl.data?.code === 'FORBIDDEN',
     `status=${staffBackupDl.status}, code=${staffBackupDl.data?.code}`);
 
+  const savedFilesRes = await api('GET', '/api/excel/files', null, TOKEN);
+  const hasTxtFile = (savedFilesRes.data?.files || []).some(f => String(f.filename || '').toLowerCase().endsWith('.txt'));
+  log('EXCEL FILES: กรอง README.txt และไฟล์ .txt ออกจากรายการเอกสาร',
+    savedFilesRes.status === 200 && savedFilesRes.data?.success === true && !hasTxtFile,
+    `files=${(savedFilesRes.data?.files || []).length}`);
+
+  const delFileStaff = await api('DELETE', '/api/excel/files/excel/README.txt', null, STAFF_TOKEN);
+  log('SECURITY: staff ลบไฟล์เอกสารต้นฉบับ → 403 (admin only)', delFileStaff.status === 403, `status=${delFileStaff.status}`);
+
+  const delFileTxtAdmin = await api('DELETE', '/api/excel/files/excel/README.txt', null, TOKEN);
+  log('EXCEL FILES: admin ลบ README.txt → 400 บล็อกนามสกุลที่ไม่อนุญาต', delFileTxtAdmin.status === 400, `status=${delFileTxtAdmin.status}`);
+
   // ---------- 13. PERSISTENCE: รีสตาร์ทแล้วข้อมูลต้องอยู่ ----------
   await stopServer();
   await startServer();
