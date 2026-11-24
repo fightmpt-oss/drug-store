@@ -385,6 +385,49 @@ async function run() {
   const delFileTxtAdmin = await api('DELETE', '/api/excel/files/excel/README.txt', null, TOKEN);
   log('EXCEL FILES: admin ลบ README.txt → 400 บล็อกนามสกุลที่ไม่อนุญาต', delFileTxtAdmin.status === 400, `status=${delFileTxtAdmin.status}`);
 
+  // ---------- 12.7 Dual-Unit Bulk Jar Receipt Import -> Auto Drug Settings & Stock Card ----------
+  const dualImport = await api('POST', '/api/excel/import', {
+    receiveno: 'TEST-DUAL-001',
+    receivedate: today,
+    supplier: 'รพ.แม่ข่าย',
+    items: [
+      {
+        drugcode: '0011',
+        matchedDrugCode: '0011',
+        hospitalDrugName: 'Clotrimazole 1% cream 500g',
+        drugname: 'Clotrimazole 1% cream 500g',
+        lotno: 'LOT-DUAL-500G',
+        dateexpire: '2029-06-30',
+        amount: 2,
+        unitType: 'dispense',
+        countByPack: true,
+        costprice: 120,
+        repackInfo: {
+          isDualUnit: true,
+          repackRatio: 50,
+          mainStoreUnit: 'กระปุก',
+          substockUnit: 'ตลับ',
+          description: 'ยาครีมกระปุก 500 g แบ่งใส่ตลับ 10 g (1 กระปุก = 50 ตลับ)'
+        }
+      }
+    ]
+  }, TOKEN);
+  log('DUAL-UNIT: นำเข้าใบรับยาบันทึก drug_settings (50 ตลับ/กระปุก) อัตโนมัติ',
+    dualImport.status === 200 && dualImport.data?.success === true && dualImport.data?.dualUnitsConfigured === 1,
+    `dualUnitsConfigured=${dualImport.data?.dualUnitsConfigured}`);
+
+  const dualSetting = await api('GET', '/api/stock/drug-settings/0011', null, TOKEN);
+  log('DUAL-UNIT: drug_settings[0011] มี conversionFactor=50, mainStoreUnit=กระปุก, counterUnit=ตลับ',
+    dualSetting.status === 200 && dualSetting.data?.data?.conversionFactor === 50 && dualSetting.data?.data?.mainStoreUnit === 'กระปุก' && dualSetting.data?.data?.counterUnit === 'ตลับ',
+    `factor=${dualSetting.data?.data?.conversionFactor}`);
+
+  const dualCard = await api('GET', `/api/stock/card/0011?startDate=${today}&endDate=${today}&mode=total_pcu`, null, TOKEN);
+  const dualMain = dualCard.data?.data?.hybridSummary?.mainStoreBalance;
+  const dualTotal = dualCard.data?.data?.hybridSummary?.totalPcuBalance;
+  log('DUAL-UNIT: Stock Card คิดยอดคลังยาใน 2 กระปุก และรวมหน้าเคาน์เตอร์ 100 ตลับ',
+    dualCard.status === 200 && dualMain === 2 && dualTotal === 100,
+    `main=${dualMain} กระปุก, total=${dualTotal} ตลับ`);
+
   // ---------- 13. PERSISTENCE: รีสตาร์ทแล้วข้อมูลต้องอยู่ ----------
   await stopServer();
   await startServer();

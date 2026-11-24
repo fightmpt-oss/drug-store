@@ -339,13 +339,13 @@ router.get('/drug-settings/:drugcode', (req, res) => {
   res.json({ success: true, data: getDrugSettings(req.params.drugcode) });
 });
 
-router.post('/drug-settings/:drugcode', (req, res) => {
+router.post('/drug-settings/:drugcode', async (req, res) => {
   try {
     const allowed = {};
-    ['minstock', 'maxstock', 'location', 'conversionFactor', 'note'].forEach(k => {
+    ['minstock', 'maxstock', 'location', 'conversionFactor', 'mainStoreUnit', 'counterUnit', 'isRepackaged', 'note'].forEach(k => {
       if (req.body[k] !== undefined) allowed[k] = req.body[k];
     });
-    const saved = setDrugSettings(req.params.drugcode, allowed, req.user.displayName);
+    const saved = await setDrugSettings(req.params.drugcode, allowed, req.user.displayName);
     res.json({ success: true, data: saved, message: 'บันทึกค่าตั้งต่อยาเรียบร้อย' });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message });

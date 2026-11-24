@@ -1,4 +1,5 @@
 const { memoryStore, getPool, isLive, getPcuCode } = require('../config/db');
+const { getDrugSettings } = require('./localStore');
 
 // Clinical drug expansions & synonyms (ครอบคลุมทั้งชื่อการค้า ชื่อสามัญทางยา และตัวย่อทางการแพทย์)
 const CLINICAL_EXPANSIONS = {
@@ -606,6 +607,86 @@ function inferLocalUnit(name = '') {
   return 'หน่วย';
 }
 
+// ตรวจจับยาครีม/ขี้ผึ้งกระปุกใหญ่แบ่งบรรจุ (Dual-Unit เช่น กระปุก 500 g แบ่งใส่ตลับ 10 g = 50 ตลับ)
+function detectDualUnitRepack(item, matchedDrug, existingSettings = null) {
+  if (existingSettings && (
+    Number(existingSettings.conversionFactor) > 1 ||
+    existingSettings.isRepackaged ||
+    Number(existingSettings.unitRatio) > 1
+  )) {
+    const ratio = Math.max(2, Number(existingSettings.conversionFactor || existingSettings.unitRatio) || 50);
+    const mainStoreUnit = existingSettings.mainStoreUnit || 'กระปุก';
+    const substockUnit = existingSettings.counterUnit || existingSettings.substockUnit || 'ตลับ';
+    return {
+      isDualUnit: true,
+      repackRatio: ratio,
+      mainStoreUnit,
+      substockUnit,
+      description: existingSettings.repackNotice || existingSettings.note || `ยาแบ่งบรรจุ (1 ${mainStoreUnit} = ${ratio} ${substockUnit})`,
+      source: 'saved_settings'
+    };
+  }
+
+  const excelText = String(item?.drugname || '').toLowerCase();
+  const jhcisText = String(matchedDrug?.drugname || '').toLowerCase();
+  if (!excelText) return null;
+
+  // ตัดรูปแบบยาที่ไม่ใช่กระปุกครีม/ขี้ผึ้งแบ่งตลับ (เช่น ยาเม็ด 500mg, แคปซูล, ยาฉีด, ยาป้ายปาก, ยาสอด, น้ำเชื่อม)
+  if (/(?:\b(?:tab|cap|inj|syr|sus|susp|vaginal|supp|irrigat|drop|sol)\b|oral\s*paste|เม็ด|แคปซูล|ยาฉีด|น้ำเชื่อม|500\s*mg|450\s*mg)/i.test(excelText)) {
+    return null;
+  }
+
+  // ตรวจจับน้ำหนักกระปุกใหญ่ 450g / 500g (รองรับทั้ง "500gm", "500 g", "Triamcinolone0.1%500gm", "500 กรัม")
+  const bulkMatch = excelText.match(/(?:^|[^0-9.])(450|500)\s*(?:g|gm|กรัม)(?:$|[^a-z])/i);
+  const hasJarSize = Boolean(bulkMatch) || (excelText.includes('กระปุก') && !excelText.includes('เม็ด') && !excelText.includes('แคปซูล'));
+  const isTopicalCreamOint = /(?:(?:^|[^a-z])cre(?:am)?(?:$|[^a-z])|oint(?:ment)?|ครีม|ขี้ผึ้ง|clotrim|triamcinolone|(?:^|[^a-z])ta\s*0\.1|urea|sulfadiazine|clobetasol)/i.test(excelText) ||
+    /(?:cream|oint|ครีม|ขี้ผึ้ง)/i.test(jhcisText);
+
+  if (!hasJarSize || !isTopicalCreamOint) return null;
+
+  const bulkGrams = bulkMatch ? Number(bulkMatch[1]) : 500;
+  const dispenseMatch = jhcisText.match(/(?:^|[^0-9.])(\d+)\s*(?:g|gm)(?:$|[^a-z%])/i);
+  const parsedDispense = dispenseMatch ? Number(dispenseMatch[1]) : 10;
+  const dispenseGrams = (parsedDispense > 0 && parsedDispense < bulkGrams) ? parsedDispense : 10;
+  const ratio = Math.max(2, Math.round(bulkGrams / dispenseGrams));
+
+  return {
+    isDualUnit: true,
+    repackRatio: ratio,
+    mainStoreUnit: 'กระปุก',
+    substockUnit: 'ตลับ',
+    bulkGrams,
+    dispenseGrams,
+    description: `ยาครีมกระปุก ${bulkGrams} g แบ่งใส่ตลับ ${dispenseGrams} g (1 กระปุก = ${ratio} ตลับ)`,
+    source: 'auto_detected'
+  };
+}
+
+function detectFloorStockInfo(item, matchedDrug, existingSettings = null) {
+  if (existingSettings && existingSettings.isFloorStock) {
+    return {
+      isFloorStock: true,
+      usageType: existingSettings.usageType || 'procedure',
+      department: existingSettings.department || 'ห้องทำแผล/อุบัติเหตุฉุกเฉิน',
+      mainStoreUnit: existingSettings.mainStoreUnit || 'ขวด',
+      description: existingSettings.procedureNotice || existingSettings.note || 'ยาหัตถการใช้ในห้องทำแผล — ตัดสต็อกคลังในตามจำนวนขวดที่เบิกจริง',
+      source: 'saved_settings'
+    };
+  }
+  const combined = `${item?.drugname || ''} ${matchedDrug?.drugname || ''}`.toLowerCase();
+  if (combined.includes('lidocaine') || combined.includes('ยาชา')) {
+    return {
+      isFloorStock: true,
+      usageType: 'procedure',
+      department: 'ห้องทำแผล/อุบัติเหตุฉุกเฉิน',
+      mainStoreUnit: 'ขวด',
+      description: 'ยาหัตถการใช้ในห้องทำแผล (1 ขวด 20 ml ดูดฉีด 3-5 ml/เคส) — ตัดสต็อกคลังในตามจำนวนขวดที่เบิกจริง',
+      source: 'auto_detected'
+    };
+  }
+  return null;
+}
+
 // Match an array of parsed Excel items against JHCIS catalogue
 async function matchExcelItems(parsedItems) {
   const jhcisDrugs = await getAllJhcisDrugs();
@@ -649,6 +730,8 @@ async function matchExcelItems(parsedItems) {
         ...item,
         isLocalOnly: true,
         countByPack: Boolean(savedMap.countByPack),
+        repackInfo: null,
+        floorStockInfo: null,
         matchStatus: 'MATCHED',
         matchType: 'LOCAL_ONLY (เฉพาะคลังยาใน ไม่ผูก JHCIS)',
         confidence: 100,
@@ -736,17 +819,23 @@ async function matchExcelItems(parsedItems) {
       }
     }
 
-    // 5. คำนวณหน่วยรับ (countByPack) เช่น ยาคุมจ่ายเป็นแผง (28 เม็ด), ชาชงจ่ายเป็นห่อใหญ่
+    // 5. ตรวจจับยาแบ่งบรรจุกระปุก (Dual-Unit เช่น กระปุก 500 g -> 50 ตลับ 10 g) และยาหัตถการ (Floor Stock)
+    const existingSettings = matchedDrug ? getDrugSettings(matchedDrug.drugcode) : null;
+    const repackInfo = matchedDrug ? detectDualUnitRepack(item, matchedDrug, existingSettings) : null;
+    const floorStockInfo = matchedDrug ? detectFloorStockInfo(item, matchedDrug, existingSettings) : null;
+
+    // 6. คำนวณหน่วยรับ (countByPack) เช่น ยาคุมจ่ายเป็นแผง (28 เม็ด), ชาชงจ่ายเป็นห่อใหญ่, หรือยาครีมกระปุก 500g (รับเข้าคลังในเป็นกระปุก)
     let finalAmount = item.amount;
     let finalCost = item.cost;
     let countByPack = false;
 
     if (matchedDrug && item.issuedQty > 0 && item.packSize > 1) {
       const autoPackUnit =
+        Boolean(repackInfo?.isDualUnit) ||
         matchedDrug.drugunit === 'แผง' ||
         (matchedDrug.drugname || '').includes('ถุงชาเล็ก');
 
-      if (savedMap?.countByPack === true || (savedMap?.countByPack !== false && autoPackUnit)) {
+      if (Boolean(repackInfo?.isDualUnit) || savedMap?.countByPack === true || (savedMap?.countByPack !== false && autoPackUnit)) {
         countByPack = true;
         finalAmount = item.issuedQty;
         finalCost = item.pricePerPack > 0 ? item.pricePerPack : item.cost;
@@ -759,6 +848,8 @@ async function matchExcelItems(parsedItems) {
       cost: finalCost,
       countByPack,
       isLocalOnly,
+      repackInfo,
+      floorStockInfo,
       matchStatus,
       matchType,
       confidence,
@@ -779,5 +870,7 @@ module.exports = {
   parseDosageForm,
   parseCategory,
   preNormalizeDrugText,
-  inferLocalUnit
+  inferLocalUnit,
+  detectDualUnitRepack,
+  detectFloorStockInfo
 };

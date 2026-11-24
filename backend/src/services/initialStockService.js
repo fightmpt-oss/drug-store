@@ -849,15 +849,22 @@ async function commitExcelInitialStock(items, options = {}, actor = 'เจ้�
       }
     }
 
-    // 2. Dual-unit settings configuration
+    // 2. Dual-unit settings configuration (บันทึกครบทั้ง conversionFactor/counterUnit และ unitRatio/substockUnit)
     if (it.repackInfo && it.repackInfo.isDualUnit) {
       try {
+        const ratio = Math.max(2, Number(it.repackInfo.repackRatio) || 50);
+        const mainStoreUnit = it.repackInfo.mainStoreUnit || 'กระปุก';
+        const counterUnit = it.repackInfo.substockUnit || it.repackInfo.counterUnit || 'ตลับ';
+        const notice = it.repackInfo.description || `ยาครีมกระปุก 500 g แบ่งใส่ตลับ 10 g (1 ${mainStoreUnit} = ${ratio} ${counterUnit})`;
         await setDrugSettings(drugcode, {
+          conversionFactor: ratio,
+          unitRatio: ratio,
           isRepackaged: true,
-          mainStoreUnit: it.repackInfo.mainStoreUnit || 'กระปุก',
-          substockUnit: it.repackInfo.substockUnit || 'ตลับ',
-          unitRatio: Number(it.repackInfo.repackRatio) || 50,
-          repackNotice: it.repackInfo.description || 'ยาครีมกระปุก 500g แบ่งใส่ตลับ 10g (1 กระปุก = 50 ตลับ)'
+          mainStoreUnit,
+          counterUnit,
+          substockUnit: counterUnit,
+          repackNotice: notice,
+          note: `1 ${mainStoreUnit} = ${ratio} ${counterUnit} (${notice})`
         }, actor);
         dualUnitsConfigured++;
       } catch (e) {

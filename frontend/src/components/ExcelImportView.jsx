@@ -18,7 +18,8 @@ import {
   Database,
   ExternalLink,
   Search,
-  X
+  X,
+  Layers
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -181,7 +182,38 @@ export default function ExcelImportView({ onImportSuccess }) {
     const fullyMatched = items.filter(i => i.matchStatus === 'MATCHED').length;
     const suggested = items.filter(i => i.matchStatus === 'SUGGESTED').length;
     const unmatched = items.filter(i => !i.matchedDrugCode || i.matchStatus === 'UNMATCHED').length;
-    return { total, fullyMatched, suggested, unmatched };
+    const dualUnitCount = items.filter(i => i.repackInfo?.isDualUnit).length;
+    return { total, fullyMatched, suggested, unmatched, dualUnitCount };
+  };
+
+  const inferClientDualUnit = (drugName, jhcisDrug) => {
+    const excelText = String(drugName || '').toLowerCase();
+    const jhcisText = String(jhcisDrug?.drugname || '').toLowerCase();
+    if (!excelText) return null;
+    if (/(?:\b(?:tab|cap|inj|syr|sus|susp|vaginal|supp|irrigat|drop|sol)\b|oral\s*paste|เม็ด|แคปซูล|ยาฉีด|น้ำเชื่อม|500\s*mg|450\s*mg)/i.test(excelText)) {
+      return null;
+    }
+    const bulkMatch = excelText.match(/(?:^|[^0-9.])(450|500)\s*(?:g|gm|กรัม)(?:$|[^a-z])/i);
+    const hasJarSize = Boolean(bulkMatch) || (excelText.includes('กระปุก') && !excelText.includes('เม็ด') && !excelText.includes('แคปซูล'));
+    const isTopical = /(?:(?:^|[^a-z])cre(?:am)?(?:$|[^a-z])|oint(?:ment)?|ครีม|ขี้ผึ้ง|clotrim|triamcinolone|(?:^|[^a-z])ta\s*0\.1|urea|sulfadiazine|clobetasol)/i.test(excelText) ||
+      /(?:cream|oint|ครีม|ขี้ผึ้ง)/i.test(jhcisText);
+    if (!hasJarSize || !isTopical) return null;
+
+    const bulkGrams = bulkMatch ? Number(bulkMatch[1]) : 500;
+    const dispenseMatch = jhcisText.match(/(?:^|[^0-9.])(\d+)\s*(?:g|gm)(?:$|[^a-z%])/i);
+    const parsedDispense = dispenseMatch ? Number(dispenseMatch[1]) : 10;
+    const dispenseGrams = (parsedDispense > 0 && parsedDispense < bulkGrams) ? parsedDispense : 10;
+    const ratio = Math.max(2, Math.round(bulkGrams / dispenseGrams));
+
+    return {
+      isDualUnit: true,
+      repackRatio: ratio,
+      mainStoreUnit: 'กระปุก',
+      substockUnit: 'ตลับ',
+      bulkGrams,
+      dispenseGrams,
+      description: `ยาครีมกระปุก ${bulkGrams} g แบ่งใส่ตลับ ${dispenseGrams} g (1 กระปุก = ${ratio} ตลับ)`
+    };
   };
 
   const handleDrugCodeChange = (index, newDrugCode) => {
@@ -190,9 +222,13 @@ export default function ExcelImportView({ onImportSuccess }) {
     const prevItem = updatedItems[index];
     const found = allDrugs.find(d => d.drugcode === newDrugCode);
 
-    const autoPackUnit = found && prevItem.issuedQty > 0 && prevItem.packSize > 1 && (
+    const nextRepack = newDrugCode
+      ? (prevItem.repackInfo?.isDualUnit ? prevItem.repackInfo : inferClientDualUnit(prevItem.drugname, found))
+      : null;
+
+    const autoPackUnit = Boolean(nextRepack?.isDualUnit) || (found && prevItem.issuedQty > 0 && prevItem.packSize > 1 && (
       found.drugunit === 'แผง' || (found.drugname || '').includes('ถุงชาเล็ก')
-    );
+    ));
     const nextCountByPack = autoPackUnit ? true : Boolean(prevItem.countByPack);
     const nextAmount = (prevItem.issuedQty > 0 && prevItem.packSize > 1)
       ? (nextCountByPack ? prevItem.issuedQty : prevItem.issuedQty * prevItem.packSize)
@@ -204,6 +240,7 @@ export default function ExcelImportView({ onImportSuccess }) {
     updatedItems[index] = {
       ...prevItem,
       isLocalOnly: false,
+      repackInfo: nextRepack,
       countByPack: nextCountByPack,
       amount: nextAmount,
       cost: nextCost,
@@ -258,6 +295,7 @@ export default function ExcelImportView({ onImportSuccess }) {
     updatedItems[index] = {
       ...prevItem,
       isLocalOnly: true,
+      repackInfo: null,
       matchedDrugCode: localCode,
       matchedDrugName: prevItem.drugname || localCode,
       matchedDrugUnit: inferredUnit,
@@ -327,6 +365,70 @@ export default function ExcelImportView({ onImportSuccess }) {
         localUnit: prevItem.matchedDrugUnit || ''
       }).catch(err => console.warn('Could not save countByPack preference:', err.message));
     }
+  };
+
+  const handleToggleDualUnit = (index) => {
+    if (!previewData) return;
+    const updatedItems = [...previewData.items];
+    const prevItem = updatedItems[index];
+    if (prevItem.isLocalOnly) return;
+
+    const currentlyDual = Boolean(prevItem.repackInfo?.isDualUnit);
+    if (currentlyDual) {
+      updatedItems[index] = {
+        ...prevItem,
+        repackInfo: null
+      };
+    } else {
+      const found = allDrugs.find(d => d.drugcode === prevItem.matchedDrugCode);
+      const inferred = inferClientDualUnit(prevItem.drugname, found);
+      const nextRepack = inferred || {
+        isDualUnit: true,
+        repackRatio: 50,
+        mainStoreUnit: 'กระปุก',
+        substockUnit: 'ตลับ',
+        description: 'ยาครีมกระปุก 500 g แบ่งใส่ตลับ 10 g (1 กระปุก = 50 ตลับ)'
+      };
+      const hasPackData = prevItem.issuedQty > 0 && prevItem.packSize > 1;
+      updatedItems[index] = {
+        ...prevItem,
+        repackInfo: nextRepack,
+        countByPack: hasPackData ? true : prevItem.countByPack,
+        amount: hasPackData ? prevItem.issuedQty : prevItem.amount,
+        cost: hasPackData && prevItem.pricePerPack > 0 ? prevItem.pricePerPack : prevItem.cost
+      };
+    }
+
+    const st = recomputeStats(updatedItems);
+    setPreviewData({
+      ...previewData,
+      totalItems: st.total,
+      stats: st,
+      items: updatedItems
+    });
+  };
+
+  const handleRepackRatioChange = (index, rawRatio) => {
+    if (!previewData) return;
+    const parsedRatio = Math.max(2, Math.round(Number(rawRatio) || 50));
+    const updatedItems = [...previewData.items];
+    const prevItem = updatedItems[index];
+    if (!prevItem?.repackInfo?.isDualUnit) return;
+
+    const mainUnit = prevItem.repackInfo.mainStoreUnit || 'กระปุก';
+    const subUnit = prevItem.repackInfo.substockUnit || 'ตลับ';
+    updatedItems[index] = {
+      ...prevItem,
+      repackInfo: {
+        ...prevItem.repackInfo,
+        repackRatio: parsedRatio,
+        description: `ยาแบ่งบรรจุ 1 ${mainUnit} = ${parsedRatio} ${subUnit}`
+      }
+    };
+    setPreviewData({
+      ...previewData,
+      items: updatedItems
+    });
   };
 
   const openDrugPicker = (index, defaultQuery = '') => {
@@ -505,6 +607,12 @@ export default function ExcelImportView({ onImportSuccess }) {
           countByPack: Boolean(i.countByPack),
           isLocalOnly: Boolean(i.isLocalOnly),
           localUnit: i.matchedDrugUnit || '',
+          repackInfo: i.repackInfo || null,
+          floorStockInfo: i.floorStockInfo || null,
+          isDualUnit: Boolean(i.repackInfo?.isDualUnit),
+          conversionFactor: i.repackInfo?.isDualUnit ? (Number(i.repackInfo.repackRatio) || 50) : 1,
+          mainStoreUnit: i.repackInfo?.mainStoreUnit || '',
+          counterUnit: i.repackInfo?.substockUnit || '',
           costprice: Number(i.cost) || 0,
           matchType: i.matchType,
           confidence: i.confidence
@@ -868,6 +976,24 @@ export default function ExcelImportView({ onImportSuccess }) {
             </div>
           </div>
 
+          {/* Dual-Unit Bulk Jar Auto-Detection Banner */}
+          {previewData.items.some(i => i.repackInfo?.isDualUnit) && (
+            <div className="rounded-xl border border-purple-200 bg-purple-50/90 px-4 py-3 text-xs text-purple-950 flex items-start gap-3 shadow-2xs">
+              <div className="p-1.5 rounded-lg bg-purple-100 text-purple-700 shrink-0 mt-0.5">
+                <Layers className="w-4 h-4" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="font-bold text-purple-900">
+                  ตรวจพบยาครีมกระปุกแบ่งบรรจุ (Dual-Unit) จำนวน{' '}
+                  {previewData.items.filter(i => i.repackInfo?.isDualUnit).length} รายการ
+                </div>
+                <p className="text-[11px] text-purple-800 leading-relaxed">
+                  ระบบรับเข้าคลังยาในเป็น <strong>"กระปุก"</strong> และเบิกออกจากคลังยาในเป็น <strong>"กระปุก"</strong> เมื่อนำไปวางหน้าเคาน์เตอร์จะแปลงเป็นหน่วยจ่าย <strong>"ตลับ"</strong> ให้โดยอัตโนมัติ (เช่น 1 กระปุก 500 g = 50 ตลับ × 10 g)
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Side-by-side PDF Viewer + Editable Table when PDF is uploaded */}
           <div className={`grid grid-cols-1 ${pdfPreviewUrl && showPdfViewer ? 'xl:grid-cols-12 gap-5' : ''}`}>
             
@@ -954,6 +1080,42 @@ export default function ExcelImportView({ onImportSuccess }) {
                                 {item.hosdrugcode ? `รหัส รพ.: ${item.hosdrugcode}` : ''} {item.tmtid ? `| TMT: ${item.tmtid}` : ''}
                               </div>
                             )}
+                            {!item.isLocalOnly && (
+                              <div className="mt-1 flex flex-wrap items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleDualUnit(idx)}
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                                    item.repackInfo?.isDualUnit
+                                      ? 'bg-purple-100 hover:bg-purple-200 text-purple-800 border-purple-300 shadow-2xs'
+                                      : 'bg-slate-50 hover:bg-purple-50 text-slate-400 hover:text-purple-700 border-slate-200'
+                                  }`}
+                                  title="คลิกเพื่อเปิด/ปิดระบบแบ่งบรรจุ (รับเข้า/เบิกคลังในเป็นกระปุก -> จ่ายผู้ป่วยเป็นตลับ)"
+                                >
+                                  <Layers className="w-3 h-3 text-purple-600 shrink-0" />
+                                  <span>
+                                    {item.repackInfo?.isDualUnit
+                                      ? `ยาแบ่งบรรจุ (1 ${item.repackInfo.mainStoreUnit || 'กระปุก'} = ${item.repackInfo.repackRatio || 50} ${item.repackInfo.substockUnit || 'ตลับ'})`
+                                      : '+ ยาแบ่งบรรจุ (กระปุก→ตลับ)'}
+                                  </span>
+                                </button>
+                                {item.repackInfo?.isDualUnit && (
+                                  <label className="inline-flex items-center gap-1 text-[10px] text-purple-800 font-semibold">
+                                    <span>×</span>
+                                    <input
+                                      type="number"
+                                      min="2"
+                                      max="1000"
+                                      value={item.repackInfo.repackRatio || 50}
+                                      onChange={(e) => handleRepackRatioChange(idx, e.target.value)}
+                                      className="w-12 px-1 py-0.5 border border-purple-300 rounded text-center font-mono text-[10px] bg-white text-purple-900"
+                                      title="จำนวนตลับต่อ 1 กระปุก"
+                                    />
+                                    <span>{item.repackInfo.substockUnit || 'ตลับ'}/{item.repackInfo.mainStoreUnit || 'กระปุก'}</span>
+                                  </label>
+                                )}
+                              </div>
+                            )}
                           </td>
 
                           {/* Match Cell: Ultra-fast responsive cell (NO 940,000 DOM options) */}
@@ -984,6 +1146,11 @@ export default function ExcelImportView({ onImportSuccess }) {
                                   {item.matchedDrugUnit && (
                                     <div className={`text-[10px] mt-0.5 ${item.isLocalOnly ? 'text-indigo-700' : 'text-emerald-700'}`}>
                                       หน่วยนับ: {item.matchedDrugUnit}
+                                    </div>
+                                  )}
+                                  {item.repackInfo?.isDualUnit && (
+                                    <div className="text-[10px] font-semibold text-purple-800 mt-0.5">
+                                      คลังใน: {item.repackInfo.mainStoreUnit || 'กระปุก'} → จ่ายผู้ป่วย: {item.repackInfo.substockUnit || 'ตลับ'} (1:{item.repackInfo.repackRatio || 50})
                                     </div>
                                   )}
                                 </div>
@@ -1084,19 +1251,31 @@ export default function ExcelImportView({ onImportSuccess }) {
                           </td>
 
                           <td className="py-2.5 px-2.5 text-right">
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={item.amount}
-                              onChange={(e) => handleItemFieldChange(idx, 'amount', e.target.value)}
-                              className="w-24 px-2 py-1 border border-emerald-300 rounded text-right font-bold text-emerald-800 font-mono text-xs bg-emerald-50/30"
-                            />
+                            <div className="inline-flex items-center justify-end gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={item.amount}
+                                onChange={(e) => handleItemFieldChange(idx, 'amount', e.target.value)}
+                                className="w-24 px-2 py-1 border border-emerald-300 rounded text-right font-bold text-emerald-800 font-mono text-xs bg-emerald-50/30"
+                              />
+                              {item.repackInfo?.isDualUnit && (
+                                <span className="text-[10px] font-bold text-purple-800 whitespace-nowrap">
+                                  {item.repackInfo.mainStoreUnit || 'กระปุก'}
+                                </span>
+                              )}
+                            </div>
+                            {item.repackInfo?.isDualUnit && (
+                              <div className="text-[10px] text-purple-700 font-semibold mt-0.5">
+                                (= {(Number(item.amount || 0) * (Number(item.repackInfo.repackRatio) || 50)).toLocaleString()} {item.repackInfo.substockUnit || 'ตลับ'}หน้าเคาน์เตอร์)
+                              </div>
+                            )}
                             {item.issuedQty > 0 && item.packSize > 1 && (
                               <div className="mt-1 flex flex-col items-end gap-0.5 text-[10px]">
                                 <span className={item.countByPack ? 'text-indigo-700 font-semibold' : 'text-slate-500'}>
                                   {item.countByPack
-                                    ? `รับเป็นแพ็ค (${item.issuedQty} ${item.matchedDrugUnit || 'แผง/ห่อ'})`
+                                    ? `รับเป็นแพ็ค (${item.issuedQty} ${item.repackInfo?.isDualUnit ? (item.repackInfo.mainStoreUnit || 'กระปุก') : (item.matchedDrugUnit || 'แผง/ห่อ')})`
                                     : `จ่าย ${item.issuedQty} × ${item.packSize}`}
                                 </span>
                                 <button
@@ -1119,6 +1298,11 @@ export default function ExcelImportView({ onImportSuccess }) {
                               onChange={(e) => handleItemFieldChange(idx, 'cost', e.target.value)}
                               className="w-20 px-2 py-1 border border-slate-200 rounded text-right font-mono text-xs text-slate-700 bg-white"
                             />
+                            {item.repackInfo?.isDualUnit && Number(item.cost) > 0 && (
+                              <div className="text-[10px] text-purple-700 mt-0.5 whitespace-nowrap">
+                                บ./{item.repackInfo.mainStoreUnit || 'กระปุก'} (≈{(Number(item.cost) / (Number(item.repackInfo.repackRatio) || 50)).toFixed(2)} บ./{item.repackInfo.substockUnit || 'ตลับ'})
+                              </div>
+                            )}
                           </td>
 
                           {/* Match Status Badge */}

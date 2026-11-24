@@ -8,6 +8,7 @@ const { parseExcelBuffer } = require('../services/excelParser');
 const { parsePdfBuffer } = require('../services/pdfReceiptParser');
 const { matchExcelItems } = require('../services/matcherService');
 const { commitStockReceipt, checkDuplicateReceiveno } = require('../services/jhcisSyncService');
+const { setDrugSettings } = require('../services/localStore');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getConfig, memoryStore, saveMappings, getPcuCode } = require('../config/db');
 
@@ -108,6 +109,7 @@ router.post('/preview', upload.single('file'), async (req, res) => {
     const fullyMatched = matchedItems.filter(i => i.matchStatus === 'MATCHED').length;
     const suggested = matchedItems.filter(i => i.matchStatus === 'SUGGESTED').length;
     const unmatched = matchedItems.filter(i => i.matchStatus === 'UNMATCHED').length;
+    const dualUnitCount = matchedItems.filter(i => i.repackInfo?.isDualUnit).length;
 
     res.json({
       success: true,
@@ -125,7 +127,8 @@ router.post('/preview', upload.single('file'), async (req, res) => {
         stats: {
           fullyMatched,
           suggested,
-          unmatched
+          unmatched,
+          dualUnitCount
         },
         items: matchedItems
       }
@@ -164,9 +167,11 @@ router.post('/import', async (req, res) => {
       items
     });
 
-    // บันทึกความจำการจับคู่ยา (Hospital Alias Memory) เพื่อให้งวดถัดไปจับคู่อัตโนมัติ 1 คลิก
+    // บันทึกความจำการจับคู่ยา (Hospital Alias Memory) และตั้งค่ายาแบ่งบรรจุ Dual-Unit / Floor Stock อัตโนมัติ
+    let dualUnitsConfigured = 0;
     if (items && Array.isArray(items)) {
       const currentPcu = getPcuCode() || '';
+      const actorName = req.user?.displayName || 'เจ้าหน้าที่คลังยา';
       let updated = false;
       for (const it of items) {
         const drugCode = String(it.drugcode || it.matchedDrugCode || '').trim();
@@ -174,6 +179,45 @@ router.post('/import', async (req, res) => {
         const hosCode = (it.hosdrugcode || '').trim();
         const normName = normalizeDrugKey(rawName);
         const normHosCode = hosCode.toLowerCase();
+
+        // บันทึกตั้งค่ายาแบ่งบรรจุ Dual-Unit (เช่น กระปุก 500 g -> 50 ตลับ 10 g) ลง drug_settings.json
+        if (drugCode && it.repackInfo && it.repackInfo.isDualUnit) {
+          try {
+            const ratio = Math.max(2, Number(it.repackInfo.repackRatio) || 50);
+            const mainStoreUnit = it.repackInfo.mainStoreUnit || 'กระปุก';
+            const counterUnit = it.repackInfo.substockUnit || it.repackInfo.counterUnit || 'ตลับ';
+            const notice = it.repackInfo.description || `ยาครีมกระปุก 500 g แบ่งใส่ตลับ 10 g (1 ${mainStoreUnit} = ${ratio} ${counterUnit})`;
+            await setDrugSettings(drugCode, {
+              conversionFactor: ratio,
+              unitRatio: ratio,
+              isRepackaged: true,
+              mainStoreUnit,
+              counterUnit,
+              substockUnit: counterUnit,
+              repackNotice: notice,
+              note: `1 ${mainStoreUnit} = ${ratio} ${counterUnit} (${notice})`
+            }, actorName);
+            dualUnitsConfigured++;
+          } catch (e) {
+            console.warn('Could not save dual-unit drug settings for', drugCode, e.message);
+          }
+        }
+
+        // บันทึกตั้งค่ายาหัตถการห้องทำแผล (Floor Stock เช่น Lidocaine 20 ml)
+        if (drugCode && it.floorStockInfo && it.floorStockInfo.isFloorStock) {
+          try {
+            await setDrugSettings(drugCode, {
+              isFloorStock: true,
+              usageType: it.floorStockInfo.usageType || 'procedure',
+              department: it.floorStockInfo.department || 'ห้องทำแผล/อุบัติเหตุฉุกเฉิน',
+              mainStoreUnit: it.floorStockInfo.mainStoreUnit || 'ขวด',
+              procedureNotice: it.floorStockInfo.description || 'ยาหัตถการใช้ในห้องทำแผล — ตัดสต็อกคลังในตามจำนวนขวดที่เบิกจริง',
+              note: 'เบิกออกจากคลังในเป็นขวด/ไวอัลไปตั้งไว้ที่ห้องทำแผล ไม่ได้จ่ายกลับบ้าน ตัดสต็อกคลังในตามยอดเบิกขวด'
+            }, actorName);
+          } catch (e) {
+            console.warn('Could not save floor-stock drug settings for', drugCode, e.message);
+          }
+        }
 
         if (drugCode && (normName || normHosCode)) {
           let existing = memoryStore.drugMappings.find(m => {
@@ -217,6 +261,11 @@ router.post('/import', async (req, res) => {
       if (updated) {
         try { saveMappings(); } catch (e) { console.warn('Could not save mappings:', e.message); }
       }
+    }
+
+    if (dualUnitsConfigured > 0) {
+      result.dualUnitsConfigured = dualUnitsConfigured;
+      result.message = `${result.message} • ตั้งค่ายาแบ่งบรรจุกระปุก (Dual-Unit) อัตโนมัติ ${dualUnitsConfigured} รายการ`;
     }
 
     res.json(result);

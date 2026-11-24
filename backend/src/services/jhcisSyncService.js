@@ -47,6 +47,10 @@ async function commitStockReceipt(receiptData = {}) {
       countByPack: Boolean(it.countByPack),
       isLocalOnly: Boolean(it.isLocalOnly),
       localUnit: it.localUnit || '',
+      isDualUnit: Boolean(it.isDualUnit || it.repackInfo?.isDualUnit),
+      conversionFactor: Number(it.conversionFactor || it.repackInfo?.repackRatio) > 1 ? Number(it.conversionFactor || it.repackInfo?.repackRatio) : 1,
+      mainStoreUnit: it.mainStoreUnit || it.repackInfo?.mainStoreUnit || '',
+      counterUnit: it.counterUnit || it.repackInfo?.substockUnit || '',
       costprice: it.costprice,
       matchType: it.matchType,
       confidence: it.confidence

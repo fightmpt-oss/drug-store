@@ -72,6 +72,10 @@ function normalizeReceiptItem(it, idx) {
     countByPack: Boolean(it.countByPack),
     isLocalOnly: Boolean(it.isLocalOnly),
     localUnit: String(it.localUnit || '').trim(),
+    isDualUnit: Boolean(it.isDualUnit),
+    conversionFactor: Number(it.conversionFactor) > 1 ? Number(it.conversionFactor) : 1,
+    mainStoreUnit: String(it.mainStoreUnit || '').trim(),
+    counterUnit: String(it.counterUnit || '').trim(),
     costprice: Math.max(0, Number(it.costprice) || 0),
     matchType: it.matchType || '',
     confidence: Number(it.confidence) || 0
@@ -356,10 +360,10 @@ function resetStockCounts(actor) {
 
 // ---------- ค่าตั้งต่อยา (เกณฑ์ต่ำสุด/สูงสุด, conversion) ----------
 function getDrugSettings(drugcode) { return drugSettingsStore.get()[String(drugcode).trim()] || null; }
-function setDrugSettings(drugcode, patch, actor) {
+async function setDrugSettings(drugcode, patch, actor) {
   if (!drugcode) { const err = new Error('กรุณาระบุรหัสยา'); err.status = 400; throw err; }
   const code = String(drugcode).trim();
-  const updated = drugSettingsStore.update(all => {
+  const updated = await drugSettingsStore.update(all => {
     const prev = all[code] || {};
     all[code] = {
       ...prev,

@@ -513,12 +513,18 @@ async function getDrugStockSummary(filters = {}) {
       lotPool.push({ lotno: r.lotno || 'N/A', dateexpire: r.dateexpire || null, amount: r.amount, costprice: r.costprice || drug.costprice || 0, source: 'รับเข้า (ใบรับยาของระบบ)' });
     });
 
-    const totalOut = totalDispensed + adjOut;
     const outByLot = {};
     adjustments.filter(a => a.direction === 'out' && a.lotno).forEach(a => {
       outByLot[a.lotno] = (outByLot[a.lotno] || 0) + a.quantity;
     });
-    const activeLots = fefoRemainingLots(lotPool, totalOut, outByLot);
+    const totalPcuLotPool = factor > 1
+      ? lotPool.map(l => ({ ...l, amount: (Number(l.amount) || 0) * factor }))
+      : lotPool;
+    const totalPcuOutByLot = factor > 1
+      ? Object.fromEntries(Object.entries(outByLot).map(([k, v]) => [k, v * factor]))
+      : outByLot;
+    const totalOut = totalDispensed + (adjOut * factor);
+    const activeLots = fefoRemainingLots(totalPcuLotPool, totalOut, totalPcuOutByLot);
 
     // Lot คงเหลือเฉพาะใน "คลังยาใน (Main Store)" สำหรับสแกน QR เบิกยา
     const mainStoreOutByLot = { ...outByLot };
@@ -1113,9 +1119,12 @@ async function getStockCardDetail(drugcode, startDate, endDate, mode = 'main_sto
   const totalPcuLotPool = factor > 1
     ? lotPool.map(l => ({ ...l, amount: (Number(l.amount) || 0) * factor }))
     : lotPool;
+  const totalPcuAdjOutByLot = factor > 1
+    ? Object.fromEntries(Object.entries(adjOutByLot).map(([k, v]) => [k, v * factor]))
+    : adjOutByLot;
 
   const totalPcuLotsSummary = consolidateLots(
-    fefoRemainingLots(totalPcuLotPool, totalDispensed + (adjOutTotal * factor), adjOutByLot)
+    fefoRemainingLots(totalPcuLotPool, totalDispensed + (adjOutTotal * factor), totalPcuAdjOutByLot)
   ).map(l => ({
     lotno: l.lotno,
     dateexpire: l.dateexpire || 'ไม่ระบุ',
