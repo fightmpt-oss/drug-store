@@ -428,6 +428,55 @@ async function run() {
     dualCard.status === 200 && dualMain === 2 && dualTotal === 100,
     `main=${dualMain} กระปุก, total=${dualTotal} ตลับ`);
 
+  // ---------- 12.8 2-Tier Counter Separation + Count Records by Date + Substock Lot Tracing ----------
+  const countSumRes = await api('GET', '/api/stock/initial-count', null, TOKEN);
+  const recToday = (countSumRes.data?.data?.countRecordsByDate || []).find(r => r.countDate === today);
+  log('COUNT RECORDS: ส่งคืน countRecordsByDate แยกตามวันที่พร้อมรายการ/Lot/Exp',
+    countSumRes.status === 200 && Boolean(recToday) && recToday.items?.some(i => i.drugcode === '0001' && i.totalAmount === 400),
+    `dates=${(countSumRes.data?.data?.countRecordsByDate || []).length}, todayItems=${recToday?.itemCount}`);
+
+  // ตั้งยอดยกมา 0002 ณ 2026-06-01 = 1000 และเช็คก่อนเบิกคลังใน (ยอดจ่าย JHCIS 1100 ต้องไม่หักคลังใน 1000!)
+  await api('POST', '/api/stock/initial-count', {
+    drugcode: '0002', drugname: 'Amoxicillin 500 mg capsule',
+    lots: [{ lotno: 'LC-FEFO', dateexpire: '2027-06-30', amount: 1000, costprice: 1.2 }],
+    countDate: '2026-06-01', countedBy: 'tester'
+  }, STAFF_TOKEN);
+
+  const ovBefore = await api('GET', '/api/stock/overview?search=0002&startDate=2026-06-01&endDate=2026-09-30&drugTypeFilter=all', null, TOKEN);
+  const item0002Pre = (ovBefore.data?.data?.items || []).find(i => i.drugcode === '0002');
+  log('2-TIER STOCK: ก่อนเบิกคลังใน ยอดจ่าย JHCIS (1100) ไม่หักคลังยาใน (คงเหลือ 1000, เคาน์เตอร์ 0)',
+    Boolean(item0002Pre) && item0002Pre.mainStoreBalance === 1000 && item0002Pre.counterBalance === 0 && item0002Pre.dispensedBeforeTransfer === 1100,
+    `main=${item0002Pre?.mainStoreBalance}, counter=${item0002Pre?.counterBalance}, beforeTx=${item0002Pre?.dispensedBeforeTransfer}`);
+
+  const dispPre = await api('GET', '/api/stock/dispensing/0002?startDate=2026-06-01&endDate=2026-09-30', null, TOKEN);
+  log('LOT TRACE: ก่อนเบิกคลังใน ระบุทุก Visit เป็นยาเก่าหน้าเคาน์เตอร์ (PRE_TRANSFER_COUNTER)',
+    dispPre.status === 200 && dispPre.data?.data?.substockSummary?.hasTransfers === false && (dispPre.data?.data?.items || []).every(i => i.lotSource === 'PRE_TRANSFER_COUNTER'),
+    `visits=${dispPre.data?.data?.items?.length}`);
+
+  // เบิกคลังใน Lot LC-FEFO จำนวน 500 วันที่ 2026-07-01
+  const subTx = await api('POST', '/api/stock/substock/transfer', {
+    drugcode: '0002', drugname: 'Amoxicillin 500 mg capsule',
+    lotno: 'LC-FEFO', dateexpire: '2027-06-30', amount: 500, date: '2026-07-01', note: 'ทดสอบเบิก Lot'
+  }, STAFF_TOKEN);
+  log('SUBSTOCK: บันทึกเบิกยาคลังใน 500 หน่วย (2026-07-01)', subTx.status === 200 && subTx.data?.success === true);
+
+  const dispPost = await api('GET', '/api/stock/dispensing/0002?startDate=2026-06-01&endDate=2026-09-30', null, TOKEN);
+  const postItems = dispPost.data?.data?.items || [];
+  const junVisit = postItems.find(i => i.dispensedate === '2026-06-15');
+  const julVisit = postItems.find(i => i.dispensedate === '2026-07-10');
+  const augVisit = postItems.find(i => i.dispensedate === '2026-08-12');
+  log('LOT TRACE: Visit ก่อนเบิก (มิ.ย.) = ยาเก่าเคาน์เตอร์, Visit หลังเบิก (ก.ค.) = Lot LC-FEFO, เกินเบิก (ส.ค.) = OVER_TRANSFERRED',
+    junVisit?.lotSource === 'PRE_TRANSFER_COUNTER' &&
+    julVisit?.lotSource === 'SUBSTOCK_LOT' && julVisit?.tracedLotNo === 'LC-FEFO' &&
+    augVisit?.lotSource === 'OVER_TRANSFERRED' && augVisit?.tracedLotNo === 'LC-FEFO',
+    `jun=${junVisit?.lotSource}, jul=${julVisit?.lotSource}:${julVisit?.tracedLotNo}, aug=${augVisit?.lotSource}:${augVisit?.tracedLotNo}`);
+
+  const ovAfter = await api('GET', '/api/stock/overview?search=0002&startDate=2026-06-01&endDate=2026-09-30&drugTypeFilter=all', null, TOKEN);
+  const item0002Post = (ovAfter.data?.data?.items || []).find(i => i.drugcode === '0002');
+  log('2-TIER STOCK: หลังเบิกคลังใน 500 คงเหลือคลังใน=500, จ่ายจากยาเก่าเคาน์เตอร์=200, จ่ายหลังเบิก=900',
+    Boolean(item0002Post) && item0002Post.mainStoreBalance === 500 && item0002Post.dispensedBeforeTransfer === 200 && item0002Post.dispensedFromCounter === 900 && item0002Post.counterBalance === -400,
+    `main=${item0002Post?.mainStoreBalance}, counter=${item0002Post?.counterBalance}, before=${item0002Post?.dispensedBeforeTransfer}, fromCounter=${item0002Post?.dispensedFromCounter}`);
+
   // ---------- 13. PERSISTENCE: รีสตาร์ทแล้วข้อมูลต้องอยู่ ----------
   await stopServer();
   await startServer();

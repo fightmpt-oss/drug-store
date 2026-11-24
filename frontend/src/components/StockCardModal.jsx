@@ -317,21 +317,34 @@ export default function StockCardModal({ drugcode, onClose, initialDateRange, on
 
                     <div className="p-2.5 rounded-xl border bg-blue-50/60 border-blue-200">
                       <div className="text-[11px] font-bold text-blue-800">💊 2. คงเหลือที่เคาน์เตอร์จ่ายยา</div>
-                      <div className={`text-base sm:text-lg font-black font-mono mt-0.5 ${Number(data.hybridSummary.counterBalance || 0) < 0 ? 'text-rose-600' : 'text-blue-900'}`}>
-                        {Number(data.hybridSummary.counterBalance || 0).toLocaleString()} <span className="text-xs font-normal">{counterUnit}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        เบิกมาเคาน์เตอร์ {Number(data.hybridSummary.totalTransferredToCounter || 0).toLocaleString()} {mainUnit}{isRepackaged ? ` (= ${(data.hybridSummary.totalTransferredToCounter * factor).toLocaleString()} ${counterUnit})` : ''} − จ่าย JHCIS {Number(data.hybridSummary.totalDispensed || 0).toLocaleString()} {counterUnit}
-                      </div>
+                      {data.hybridSummary.hasSubstockTransfers ? (
+                        <>
+                          <div className={`text-base sm:text-lg font-black font-mono mt-0.5 ${Number(data.hybridSummary.counterBalance || 0) < 0 ? 'text-rose-600' : 'text-blue-900'}`}>
+                            {Number(data.hybridSummary.counterBalance || 0).toLocaleString()} <span className="text-xs font-normal">{counterUnit}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            เบิกมา {Number(data.hybridSummary.totalTransferredToCounter || 0).toLocaleString()} {mainUnit}{isRepackaged ? ` (= ${(data.hybridSummary.totalTransferredToCounter * factor).toLocaleString()} ${counterUnit})` : ''} (ตั้งแต่ {data.hybridSummary.firstSubstockDate}) − จ่าย JHCIS {Number(data.hybridSummary.dispensedFromCounter || 0).toLocaleString()} {counterUnit}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-sm font-black text-amber-800 mt-1">
+                            ยาเก่าหน้าเคาน์เตอร์
+                          </div>
+                          <div className="text-[10px] text-slate-600 mt-0.5">
+                            ยังไม่เบิกจากคลังยาใน • จ่ายยาเก่าหน้าเคาน์เตอร์ไปแล้ว {Number(data.hybridSummary.dispensedBeforeTransfer || data.hybridSummary.totalDispensed || 0).toLocaleString()} {counterUnit}
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div className={`p-2.5 rounded-xl border ${cardMode === 'total_pcu' ? 'bg-slate-100 border-slate-400 ring-1 ring-slate-400' : 'bg-white border-slate-200'}`}>
                       <div className="text-[11px] font-bold text-slate-700">🏥 3. คงเหลือรวมทั้ง รพ.สต.</div>
                       <div className="text-base sm:text-lg font-black text-slate-900 font-mono mt-0.5">
-                        {Number(data.hybridSummary.totalPcuBalance || 0).toLocaleString()} <span className="text-xs font-normal">{counterUnit}</span>
+                        {Number(cardMode === 'main_store' ? (data.hybridSummary.trackedPcuBalance ?? data.hybridSummary.totalPcuBalance ?? 0) : (data.hybridSummary.totalPcuBalance || 0)).toLocaleString()} <span className="text-xs font-normal">{counterUnit}</span>
                       </div>
                       <div className="text-[10px] text-slate-500">
-                        คลังยาใน ({Number(data.hybridSummary.mainStoreBalance || 0).toLocaleString()} {mainUnit}) + เคาน์เตอร์ ({Number(data.hybridSummary.counterBalance || 0).toLocaleString()} {counterUnit})
+                        คลังยาใน ({Number(data.hybridSummary.mainStoreBalance || 0).toLocaleString()} {mainUnit}){data.hybridSummary.hasSubstockTransfers ? ` + เคาน์เตอร์ (${Number(data.hybridSummary.counterBalance || 0).toLocaleString()} ${counterUnit})` : ' • ยอดจ่ายก่อนเบิกมาจากยาเก่าเคาน์เตอร์'}
                       </div>
                     </div>
                   </div>

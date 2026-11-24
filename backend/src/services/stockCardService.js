@@ -472,23 +472,40 @@ async function getDrugStockSummary(filters = {}) {
     const mainStoreUnit = settings.mainStoreUnit || (factor > 1 ? 'กระปุก' : drug.drugunit);
     const counterUnit = settings.counterUnit || drug.drugunit;
 
-    const substockTransfers = allSubstockTransfers.filter(t => t.drugcode === code && t.date >= activityFrom && t.date <= endDate);
+    const substockTransfers = allSubstockTransfers
+      .filter(t => t.drugcode === code && t.date >= activityFrom && t.date <= endDate)
+      .slice()
+      .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : (a.createdAt || '').localeCompare(b.createdAt || '')));
     // ยอดเบิกออกจากคลังยาใน (หน่วยคลังยาใน เช่น กระปุก 500g)
     const totalTransferredToCounter = substockTransfers.reduce((s, t) => s + t.amount, 0);
+    const hasSubstockTransfers = totalTransferredToCounter > 0;
+    const firstSubstockDate = substockTransfers.length > 0 ? substockTransfers[0].date : null;
 
-    // ยอดคงเหลือคลังยาใน (Main Store Balance) = ยกมา + รับเข้า + ปรับเพิ่ม - ปรับลด - เบิกออกวางเคาน์เตอร์ (หน่วย: กระปุก)
+    // แยกยอดจ่าย JHCIS: ก่อนเบิกคลังในครั้งแรก = จ่ายจากยาเก่าหน้าเคาน์เตอร์ (ไม่หักคลังใน 1 ต.ค.), ตั้งแต่วันเบิก = ตัดยอดที่เคาน์เตอร์
+    let dispensedBeforeTransfer = 0;
+    let dispensedFromCounter = 0;
+    Object.keys(dispenseDayMap).forEach(day => {
+      if (day >= activityFrom && day <= endDate) {
+        if (firstSubstockDate && day >= firstSubstockDate) {
+          dispensedFromCounter += dispenseDayMap[day];
+        } else {
+          dispensedBeforeTransfer += dispenseDayMap[day];
+        }
+      }
+    });
+
+    // ยอดคงเหลือคลังยาใน (Main Store Balance) = ยกมา + รับเข้า + ปรับเพิ่ม - ปรับลด - เบิกออกวางเคาน์เตอร์
     const mainStoreBalance = bfInfo.bf + totalReceived + adjIn - adjOut - totalTransferredToCounter;
 
-    // ยอดนำมาแบ่งบรรจุเข้าสู่หน้าเคาน์เตอร์ (แปลงเป็นหน่วยจ่ายผู้ป่วย เช่น 1 กระปุก = 50 ตลับ)
+    // ยอดนำมาวางที่เคาน์เตอร์ (แปลงเป็นหน่วยจ่ายผู้ป่วย เช่น 1 กระปุก = 50 ตลับ)
     const counterStockReceived = totalTransferredToCounter * factor;
 
-    // ยอดคงเหลือหน้าเคาน์เตอร์ (Counter Stock Balance) = เบิกมาวางเคาน์เตอร์ - จ่ายผู้ป่วยจริงใน JHCIS (หน่วย: ตลับ)
-    const counterBalance = counterStockReceived > 0 ? (counterStockReceived - totalDispensed) : (totalDispensed > 0 ? -totalDispensed : 0);
+    // ยอดคงเหลือหน้าเคาน์เตอร์ = เริ่มติดตามเมื่อมีประวัติเบิกคลังใน (ก่อนเบิก = ยาเก่าหน้าเคาน์เตอร์ ไม่นำมาติดลบ)
+    const counterBalance = hasSubstockTransfers ? (counterStockReceived - dispensedFromCounter) : 0;
 
-    // ยอดคงเหลือรวมสุทธิทั้ง รพ.สต. (Total PCU Balance) ในหน่วยจ่ายผู้ป่วย (ตลับ)
-    const currentBalance = factor > 1
-      ? ((mainStoreBalance * factor) + (counterStockReceived > 0 ? (counterStockReceived - totalDispensed) : -totalDispensed))
-      : (bfInfo.bf + totalReceived - totalDispensed + adjIn - adjOut);
+    // ยอดคงเหลือรวมที่ติดตามจากคลังใน + เคาน์เตอร์ที่เบิกมาแล้ว (ในหน่วยจ่ายผู้ป่วย)
+    const currentBalance = (mainStoreBalance * factor) + counterBalance;
+    const rawJhcisBalance = ((bfInfo.bf + totalReceived + adjIn - adjOut) * factor) - totalDispensed;
 
     // AMC ตามจำนวนวันจริงของช่วงเคลื่อนไหว
     const actualDays = Math.max(1, Math.round((new Date(endDate) - new Date(activityFrom)) / 86400000) + 1);
@@ -523,7 +540,7 @@ async function getDrugStockSummary(filters = {}) {
     const totalPcuOutByLot = factor > 1
       ? Object.fromEntries(Object.entries(outByLot).map(([k, v]) => [k, v * factor]))
       : outByLot;
-    const totalOut = totalDispensed + (adjOut * factor);
+    const totalOut = dispensedFromCounter + (adjOut * factor);
     const activeLots = fefoRemainingLots(totalPcuLotPool, totalOut, totalPcuOutByLot);
 
     // Lot คงเหลือเฉพาะใน "คลังยาใน (Main Store)" สำหรับสแกน QR เบิกยา
@@ -575,8 +592,16 @@ async function getDrugStockSummary(filters = {}) {
     const minStock = minSetting !== undefined && minSetting !== null && minSetting !== '' ? Number(minSetting) : (Number(drug.minstock) || null);
     const maxStock = maxSetting !== undefined && maxSetting !== null && maxSetting !== '' ? Number(maxSetting) : (Number(drug.maxstock) || null);
 
-    if (currentBalance < 0) {
-      statuses.push({ code: 'NEGATIVE_STOCK', label: 'สต็อกติดลบ', detail: 'ยอดคงเหลือติดลบ (จ่ายมากกว่ายอดรับ/ยกมา)', color: 'rose', priority: 0 });
+    if (mainStoreBalance < 0 || (hasSubstockTransfers && counterBalance < 0)) {
+      statuses.push({
+        code: 'NEGATIVE_STOCK',
+        label: 'สต็อกติดลบ',
+        detail: mainStoreBalance < 0
+          ? 'ยอดคงเหลือคลังยาในติดลบ (เบิกออกมากกว่ายอดยกมา/รับเข้า)'
+          : 'ยอดคงเหลือหน้าเคาน์เตอร์ติดลบ (จ่ายมากกว่ายอดเบิกออกจากคลังใน)',
+        color: 'rose',
+        priority: 0
+      });
     }
     if (hasExpiredLot) {
       statuses.push({ code: 'EXPIRED', label: 'ยาหมดอายุ', detail: 'ยาหมดอายุแล้ว — ห้ามจ่าย ต้องตัดจำหน่าย', color: 'red', priority: 1 });
@@ -660,7 +685,11 @@ async function getDrugStockSummary(filters = {}) {
       counterBalance,
       counterUnit,
       conversionFactor: factor,
-      hasSubstockTransfers: totalTransferredToCounter > 0,
+      hasSubstockTransfers,
+      firstSubstockDate,
+      dispensedBeforeTransfer,
+      dispensedFromCounter,
+      rawJhcisBalance,
       currentBalance,
       isLocalOnly: Boolean(drug.isLocalOnly),
       hosdrugcode: savedMap?.hosdrugcode || receiptRowsInWindow[0]?.hosdrugcode || '',
@@ -1135,10 +1164,28 @@ async function getStockCardDetail(drugcode, startDate, endDate, mode = 'main_sto
     source: l.source
   }));
 
+  const substockTransfersSorted = substockTransfers
+    .slice()
+    .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : (a.createdAt || '').localeCompare(b.createdAt || '')));
+  const hasSubstockTransfers = totalTransferredToCounter > 0;
+  const firstSubstockDate = substockTransfersSorted.length > 0 ? substockTransfersSorted[0].date : null;
+  let dispensedBeforeTransfer = 0;
+  let dispensedFromCounter = 0;
+  Object.keys(dispenseDayMap).forEach(day => {
+    if (day >= activityFrom && day <= E) {
+      if (firstSubstockDate && day >= firstSubstockDate) {
+        dispensedFromCounter += dispenseDayMap[day];
+      } else {
+        dispensedBeforeTransfer += dispenseDayMap[day];
+      }
+    }
+  });
+
   const counterReceived = totalTransferredToCounter * factor;
-  const counterBalance = counterReceived > 0
-    ? (counterReceived - totalDispensed)
-    : (totalDispensed > 0 ? -totalDispensed : 0);
+  const counterBalance = hasSubstockTransfers
+    ? (counterReceived - dispensedFromCounter)
+    : 0;
+  const trackedPcuBalance = (mainStoreResult.finalBalance * factor) + counterBalance;
 
   const hybridSummary = {
     broughtForward: bfInfo.bf,
@@ -1147,13 +1194,17 @@ async function getStockCardDetail(drugcode, startDate, endDate, mode = 'main_sto
     mainStoreBalance: mainStoreResult.finalBalance,
     mainStoreUnit,
     totalDispensed,
+    dispensedBeforeTransfer,
+    dispensedFromCounter,
+    firstSubstockDate,
     counterBalance,
     counterUnit,
     conversionFactor: factor,
+    trackedPcuBalance,
     totalPcuBalance: factor > 1
       ? ((mainStoreResult.finalBalance * factor) + (counterReceived > 0 ? (counterReceived - totalDispensed) : -totalDispensed))
       : totalPcuResult.finalBalance,
-    hasSubstockTransfers: totalTransferredToCounter > 0
+    hasSubstockTransfers
   };
 
   const useMainStore = mode === 'main_store';
@@ -1269,6 +1320,136 @@ async function getDrugSubstockInfo(codeOrQr, startDate, endDate) {
   };
 }
 
+// จับคู่ประวัติการจ่ายยาให้ผู้ป่วยกับ Lot ที่เบิกออกจากคลังยาในตามลำดับเวลา (FIFO/FEFO ของ Lot บนเคาน์เตอร์)
+function assignLotsFromSubstockTransfers(transfers = [], factor = 1, visitsAsc = []) {
+  const sortedTransfers = transfers
+    .slice()
+    .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : (a.createdAt || '').localeCompare(b.createdAt || '')));
+  const firstTransferDate = sortedTransfers.length > 0 ? sortedTransfers[0].date : null;
+
+  const sortedVisits = visitsAsc.slice().sort((a, b) => {
+    const dCmp = String(a.dispensedate || '').localeCompare(String(b.dispensedate || ''));
+    if (dCmp !== 0) return dCmp;
+    const tCmp = String(a.dispensetime || '').localeCompare(String(b.dispensetime || ''));
+    if (tCmp !== 0) return tCmp;
+    return String(a.visitno || '').localeCompare(String(b.visitno || ''));
+  });
+
+  const queue = [];
+  let tIdx = 0;
+  const exactMap = new Map();
+  const visitMap = new Map();
+
+  for (const v of sortedVisits) {
+    const vDate = String(v.dispensedate || '').slice(0, 10);
+    const vUnits = Number(v.unit) || 0;
+    const exactKey = `${v.visitno}|${vDate}|${vUnits}`;
+
+    if (!firstTransferDate || !vDate || vDate < firstTransferDate) {
+      const info = {
+        lotSource: 'PRE_TRANSFER_COUNTER',
+        lotTraceLabel: 'ยาเก่าหน้าเคาน์เตอร์ (ก่อนเบิกคลังใน)',
+        tracedLotNo: '',
+        tracedDateExpire: '',
+        tracedTransferDate: '',
+        tracedLots: []
+      };
+      exactMap.set(exactKey, info);
+      if (!visitMap.has(String(v.visitno))) visitMap.set(String(v.visitno), info);
+      continue;
+    }
+
+    while (tIdx < sortedTransfers.length && sortedTransfers[tIdx].date <= vDate) {
+      const tr = sortedTransfers[tIdx];
+      const yieldUnits = Number(tr.counterYield) > 0
+        ? Number(tr.counterYield)
+        : (Number(tr.amount) || 0) * factor;
+      if (yieldUnits > 0) {
+        queue.push({
+          lotno: tr.lotno || 'ไม่ระบุ',
+          dateexpire: tr.dateexpire || '',
+          transferDate: tr.date,
+          transferNo: tr.transferNo || '',
+          remaining: yieldUnits
+        });
+      }
+      tIdx++;
+    }
+
+    // จัดลำดับเคาน์เตอร์: เบิกมาก่อนจ่ายก่อน และถ้าเบิกวันเดียวกันให้หมดอายุก่อนออกก่อน (FEFO)
+    queue.sort((a, b) => {
+      if (a.transferDate !== b.transferDate) return a.transferDate.localeCompare(b.transferDate);
+      const ea = a.dateexpire || '9999-99-99';
+      const eb = b.dateexpire || '9999-99-99';
+      return ea.localeCompare(eb);
+    });
+
+    let needed = vUnits;
+    const tracedLots = [];
+    for (const qLot of queue) {
+      if (needed <= 0) break;
+      if (qLot.remaining <= 0) continue;
+      const take = Math.min(needed, qLot.remaining);
+      qLot.remaining -= take;
+      needed -= take;
+      const existing = tracedLots.find(x => x.lotno === qLot.lotno && x.transferDate === qLot.transferDate);
+      if (existing) {
+        existing.units += take;
+      } else {
+        tracedLots.push({
+          lotno: qLot.lotno,
+          dateexpire: qLot.dateexpire,
+          transferDate: qLot.transferDate,
+          transferNo: qLot.transferNo,
+          units: take
+        });
+      }
+    }
+
+    let info;
+    if (needed <= 0 && tracedLots.length > 0) {
+      info = {
+        lotSource: 'SUBSTOCK_LOT',
+        lotTraceLabel: tracedLots.map(l => l.lotno).join(', '),
+        tracedLotNo: tracedLots[0].lotno,
+        tracedDateExpire: tracedLots[0].dateexpire || '',
+        tracedTransferDate: tracedLots[0].transferDate || '',
+        tracedLots
+      };
+    } else {
+      info = {
+        lotSource: 'OVER_TRANSFERRED',
+        lotTraceLabel: tracedLots.length > 0
+          ? `${tracedLots.map(l => l.lotno).join(', ')} (+เกินยอดเบิก)`
+          : 'เกินยอดเบิกคลังใน (รอสแกนเบิก)',
+        tracedLotNo: tracedLots[0]?.lotno || '',
+        tracedDateExpire: tracedLots[0]?.dateexpire || '',
+        tracedTransferDate: tracedLots[0]?.transferDate || '',
+        tracedLots
+      };
+    }
+
+    exactMap.set(exactKey, info);
+    if (!visitMap.has(String(v.visitno))) visitMap.set(String(v.visitno), info);
+  }
+
+  return {
+    firstTransferDate,
+    lookup: (visitno, dispensedate, unit) =>
+      exactMap.get(`${visitno}|${dispensedate}|${Number(unit) || 0}`) ||
+      visitMap.get(String(visitno)) || {
+        lotSource: firstTransferDate && dispensedate >= firstTransferDate ? 'OVER_TRANSFERRED' : 'PRE_TRANSFER_COUNTER',
+        lotTraceLabel: firstTransferDate && dispensedate >= firstTransferDate
+          ? 'เกินยอดเบิกคลังใน (รอสแกนเบิก)'
+          : 'ยาเก่าหน้าเคาน์เตอร์ (ก่อนเบิกคลังใน)',
+        tracedLotNo: '',
+        tracedDateExpire: '',
+        tracedTransferDate: '',
+        tracedLots: []
+      }
+  };
+}
+
 // ---------- ประวัติจ่ายยาต่อผู้ป่วย (PDPA: mask ฝั่ง server เสมอ ยกเว้น reveal ที่มีเหตุผล) ----------
 async function getDrugDispensingHistory(drugcode, options = {}) {
   assertDataAvailable('ประวัติการจ่ายยาให้ผู้ป่วย');
@@ -1283,8 +1464,24 @@ async function getDrugDispensingHistory(drugcode, options = {}) {
   } = options;
   const cappedLimit = Math.min(500, Math.max(1, Number(limit) || 100));
 
-  const drugs = await getAllJhcisDrugs();
+  const drugs = await getAllDrugsWithLocal();
   const drug = drugs.find(d => d.drugcode === drugcode) || { drugcode, drugname: 'ยา', drugunit: 'หน่วย' };
+
+  const transfers = listSubstockTransfers({ drugcode, startDate: '1970-01-01', endDate })
+    .slice()
+    .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : (a.createdAt || '').localeCompare(b.createdAt || '')));
+  const settings = getDrugSettings(drugcode) || {};
+  const factor = Number(settings.conversionFactor) > 1 ? Number(settings.conversionFactor) : 1;
+  const totalTransferredCounterUnits = transfers.reduce((s, t) => (
+    s + (Number(t.counterYield) > 0 ? Number(t.counterYield) : (Number(t.amount) || 0) * factor)
+  ), 0);
+  const substockSummary = {
+    hasTransfers: transfers.length > 0,
+    firstTransferDate: transfers.length > 0 ? transfers[0].date : null,
+    totalTransfers: transfers.length,
+    totalTransferredCounterUnits,
+    factor
+  };
 
   if (isLive()) {
     try {
@@ -1301,6 +1498,24 @@ async function getDrugDispensingHistory(drugcode, options = {}) {
       const distinctPatients = Number(aggRows[0]?.distinctPatients) || 0;
       const totalUnits = Number(aggRows[0]?.totalUnits) || 0;
       const totalVisits = Number(aggRows[0]?.totalVisits) || 0;
+
+      // ดึงลำดับการจ่ายยาจริงแบบ ASC ตั้งแต่วันเบิกคลังในครั้งแรกเพื่อติดตาม Lot บนเคาน์เตอร์ (Read-Only SELECT)
+      let lotTracer = null;
+      if (transfers.length > 0) {
+        const traceFrom = transfers[0].date;
+        const [ascRows] = await pool.query(`
+          SELECT vd.visitno, vd.unit,
+                 COALESCE(DATE_FORMAT(vd.dateupdate, '%Y-%m-%d'), DATE_FORMAT(v.visitdate, '%Y-%m-%d')) as dispensedate,
+                 COALESCE(DATE_FORMAT(vd.dateupdate, '%H:%i:%s'), v.timestart, '') as dispensetime
+          FROM visitdrug vd
+          JOIN visit v ON vd.visitno = v.visitno
+          WHERE vd.drugcode = ? AND DATE(vd.dateupdate) >= ? AND DATE(vd.dateupdate) <= ?
+          ORDER BY dispensedate ASC, dispensetime ASC, vd.visitno ASC
+        `, [drugcode, traceFrom, endDate]);
+        lotTracer = assignLotsFromSubstockTransfers(transfers, factor, ascRows);
+      } else {
+        lotTracer = assignLotsFromSubstockTransfers([], factor, []);
+      }
 
       let query = `
         SELECT vd.visitno, vd.drugcode, cdrug.drugname, vd.unit,
@@ -1344,6 +1559,8 @@ async function getDrugDispensingHistory(drugcode, options = {}) {
         else if (r.pid) patientName = `ผู้ป่วย (PID: ${r.pid})`;
         else patientName = 'ไม่ระบุชื่อผู้ป่วย';
 
+        const lotTrace = lotTracer.lookup(r.visitno, r.dispensedate, r.unit);
+
         // PDPA: ส่งออกเฉพาะข้อมูลที่ mask แล้ว เว้นแต่ reveal=true (route บังคับ reason + audit แล้ว)
         return {
           visitno: r.visitno,
@@ -1362,7 +1579,8 @@ async function getDrugDispensingHistory(drugcode, options = {}) {
           dateupdate: r.dateupdate || '',
           diagcode: r.diagcode || '-',
           diseasename: r.diseasename || '-',
-          diseasenamethai: r.diseasenamethai || r.diseasename || '-'
+          diseasenamethai: r.diseasenamethai || r.diseasename || '-',
+          ...lotTrace
         };
       });
 
@@ -1374,6 +1592,7 @@ async function getDrugDispensingHistory(drugcode, options = {}) {
         dateRange: { startDate, endDate },
         pdpaPolicy: PDPA_POLICY,
         masked: !reveal,
+        substockSummary,
         items
       };
     } catch (err) {
@@ -1390,11 +1609,17 @@ async function getDrugDispensingHistory(drugcode, options = {}) {
     { title: 'นางสาว', fname: 'วรรณา', lname: 'รัตนชัย', pid: '1089', diag: 'K21.9', diagThai: 'โรคกรดไหลย้อน', dose: 'กินครั้งละ 1 แคปซูล ก่อนอาหาร 30 นาที เช้า' }
   ];
 
+  const allDemoDrugVisitsAsc = memoryStore.dispensing
+    .filter(d => d.drugcode === drugcode && d.date <= endDate)
+    .map(d => ({ visitno: d.visitno, unit: Number(d.unit), dispensedate: d.date, dispensetime: '09:30:00' }));
+  const demoLotTracer = assignLotsFromSubstockTransfers(transfers, factor, allDemoDrugVisitsAsc);
+
   const demoItems = memoryStore.dispensing
     .filter(d => d.drugcode === drugcode && d.date >= startDate && d.date <= endDate)
     .map((d, idx) => {
       const p = mockNames[idx % mockNames.length];
       const fullName = `${p.title}${p.fname} ${p.lname}`;
+      const lotTrace = demoLotTracer.lookup(d.visitno, d.date, d.unit);
       return {
         visitno: d.visitno,
         pid: reveal ? p.pid : maskPid(p.pid),
@@ -1411,7 +1636,8 @@ async function getDrugDispensingHistory(drugcode, options = {}) {
         dateupdate: `${d.date} 09:30:00`,
         diagcode: p.diag,
         diseasename: p.diag,
-        diseasenamethai: p.diagThai
+        diseasenamethai: p.diagThai,
+        ...lotTrace
       };
     });
 
@@ -1424,6 +1650,7 @@ async function getDrugDispensingHistory(drugcode, options = {}) {
     dateRange: { startDate, endDate },
     pdpaPolicy: PDPA_POLICY,
     masked: !reveal,
+    substockSummary,
     items: demoItems
   };
 }
@@ -1565,6 +1792,10 @@ async function getVarianceReport(asOfDate) {
     const adj = listAdjustments({ drugcode: code, startDate: C, endDate: target });
     const adjIn = adj.filter(a => a.direction === 'in' && a.date >= C).reduce((s, a) => s + a.quantity, 0);
     const adjOut = adj.filter(a => a.direction === 'out' && a.date >= C).reduce((s, a) => s + a.quantity, 0);
+    const transferredSinceCount = listSubstockTransfers({ drugcode: code, startDate: C, endDate: target })
+      .filter(t => t.date >= C)
+      .reduce((s, t) => s + t.amount, 0);
+    const mainStoreBalance = count.totalAmount + received - transferredSinceCount + adjIn - adjOut;
     // ยอดคุมปัจจุบัน (forward จากผลนับ): ยอดนับ + รับเข้า − จ่ายออก + ปรับปรุง ตั้งแต่วันนับถึงวัน target
     // (ใช้สูตรเดียวกับเครื่องยนต์ Stock Card จึงได้ตัวเลขเดียวกันเสมอ)
     const computed = count.totalAmount + received - dispensed + adjIn - adjOut;
@@ -1576,6 +1807,8 @@ async function getVarianceReport(asOfDate) {
       countDate: C,
       counted: count.totalAmount,
       receivedSinceCount: received,
+      transferredSinceCount,
+      mainStoreBalance,
       dispensedSinceCount: dispensed,
       adjustedIn: adjIn,
       adjustedOut: adjOut,

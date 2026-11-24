@@ -245,6 +245,33 @@ export default function PatientDispenseModal({ drugcode, drugname, initialDateRa
             </div>
           </div>
 
+          {/* Substock Lot Trace Info Banner */}
+          {data?.substockSummary && (
+            <div className={`px-3.5 py-2.5 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2 ${
+              data.substockSummary.hasTransfers
+                ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                : 'bg-amber-50/70 border-amber-200 text-amber-950'
+            }`}>
+              <div className="flex items-center space-x-2">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${data.substockSummary.hasTransfers ? 'bg-emerald-600' : 'bg-amber-500'}`} />
+                {data.substockSummary.hasTransfers ? (
+                  <span>
+                    <strong>เชื่อม Lot จากเมนูเบิกยาคลังในแล้ว</strong> ({data.substockSummary.totalTransfers} ครั้ง ตั้งแต่ <span className="font-mono font-bold">{data.substockSummary.firstTransferDate}</span>) — Visit ตั้งแต่วันเบิกจะแสดง Lot / วันหมดอายุที่เบิกมาวางเคาน์เตอร์จริง
+                  </span>
+                ) : (
+                  <span>
+                    <strong>ยังไม่เคยเบิกยานี้จากคลังยาใน (1 ต.ค. เป็นต้นมา)</strong> — รายการจ่ายทั้งหมดในช่วงนี้จ่ายจาก <strong>ยาเก่าหน้าเคาน์เตอร์</strong> ไม่หักยอดคลังยาใน
+                  </span>
+                )}
+              </div>
+              {data.substockSummary.hasTransfers && (
+                <span className="font-mono text-[11px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                  เบิกมาเคาน์เตอร์รวม {Number(data.substockSummary.totalTransferredCounterUnits || 0).toLocaleString()} {data?.drug?.drugunit || 'หน่วย'}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Table */}
           {loading ? (
             <div className="py-20 text-center text-slate-400 space-y-2">
@@ -272,6 +299,7 @@ export default function PatientDispenseModal({ drugcode, drugname, initialDateRa
                       <th className="py-2.5 px-2 font-mono whitespace-nowrap">Visit No.</th>
                       <th className="py-2.5 px-2.5 sm:px-3">ผู้ป่วยที่ได้รับยา (Person)</th>
                       <th className="py-2.5 px-2 text-right whitespace-nowrap">จำนวนที่จ่าย</th>
+                      <th className="py-2.5 px-2.5 sm:px-3 whitespace-nowrap">Lot / Exp (จากการเบิกคลังใน)</th>
                       <th className="py-2.5 px-2.5 sm:px-3">วิธีใช้ยา (Dose)</th>
                       <th className="py-2.5 px-2.5 sm:px-3">การวินิจฉัยโรค (ICD-10)</th>
                     </tr>
@@ -332,6 +360,40 @@ export default function PatientDispenseModal({ drugcode, drugname, initialDateRa
                           <span className="text-xs font-medium text-slate-600 ml-1">
                             {item.drugunit || 'หน่วย'}
                           </span>
+                        </td>
+
+                        {/* Substock Lot Trace Cell */}
+                        <td className="py-2.5 px-2.5 sm:px-3 whitespace-nowrap">
+                          {item.lotSource === 'SUBSTOCK_LOT' ? (
+                            <div className="space-y-1">
+                              {(item.tracedLots || []).map((tl, tlIdx) => (
+                                <div key={tlIdx} className="inline-flex flex-col px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-950 mr-1">
+                                  <span className="font-mono font-bold text-[11px] text-emerald-800">
+                                    Lot: {tl.lotno}
+                                  </span>
+                                  <span className="text-[10px] text-slate-600 font-mono">
+                                    Exp: {tl.dateexpire || 'ไม่ระบุ'} • เบิก {tl.transferDate}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : item.lotSource === 'OVER_TRANSFERRED' ? (
+                            <div className="space-y-1">
+                              {(item.tracedLots || []).map((tl, tlIdx) => (
+                                <div key={tlIdx} className="inline-flex flex-col px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-900 mr-1">
+                                  <span className="font-mono font-bold text-[10px]">Lot: {tl.lotno}</span>
+                                </div>
+                              ))}
+                              <div className="inline-block px-2 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-800 text-[10px] font-bold">
+                                เกินยอดเบิกคลังใน (รอสแกนเบิก)
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="inline-flex flex-col px-2 py-1 rounded-lg bg-amber-50/80 border border-amber-200 text-amber-900">
+                              <span className="text-[11px] font-bold">ยาเก่าหน้าเคาน์เตอร์</span>
+                              <span className="text-[10px] text-amber-700">ก่อนเบิกคลังใน</span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Dose Instructions */}

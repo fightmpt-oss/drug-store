@@ -595,7 +595,7 @@ async function getAllJhcisDrugs() {
       console.error('Error querying live cdrug:', err.message);
     }
   }
-  return memoryStore.drugs;
+  return (memoryStore.drugs || []).map(d => ({ ...d, drugflag: d.drugflag || '1' }));
 }
 
 function inferLocalUnit(name = '') {

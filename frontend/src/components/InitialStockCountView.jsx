@@ -46,13 +46,16 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
     totalUncountedItems: 0,
     totalCountedUnits: 0,
     totalCountedValue: 0,
+    countRecordsByDate: [],
     countsMap: {}
   });
 
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('01'); // default 01: ยาแผนปัจจุบัน
   const [countFilter, setCountFilter] = useState('all'); // 'all', 'counted', 'uncounted'
-  const [activeMode, setActiveMode] = useState('grid'); // 'grid' | 'single'
+  const [activeMode, setActiveMode] = useState('grid'); // 'grid' | 'single' | 'records'
+  const [expandedRecordDates, setExpandedRecordDates] = useState({});
+  const [recordSearch, setRecordSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -97,7 +100,19 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
   const [matchTab, setMatchTab] = useState('nonzero'); // 'nonzero', 'all', 'exact', 'suggested', 'unmatched', 'dualunit'
   const [resetBeforeCommit, setResetBeforeCommit] = useState(true);
   const [saveMappings, setSaveMappings] = useState(true);
+  const [matchCountDate, setMatchCountDate] = useState('2026-10-01');
   const [committingMatches, setCommittingMatches] = useState(false);
+
+  const formatThaiDate = (iso) => {
+    if (!iso || iso === 'ไม่ระบุวันที่') return iso || '-';
+    const parts = String(iso).split('-');
+    if (parts.length !== 3) return iso;
+    const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const y = Number(parts[0]) + 543;
+    const m = months[Number(parts[1]) - 1] || parts[1];
+    const d = Number(parts[2]);
+    return `${d} ${m} ${y}`;
+  };
 
   // Drug Picker Submodal State
   const [pickingRowId, setPickingRowId] = useState(null);
@@ -803,6 +818,7 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
       return;
     }
 
+    const targetDate = matchCountDate || '2026-10-01';
     const payloadItems = selectedItems.map(i => ({
       excelRowIndex: i.excelRowIndex,
       rawName: i.rawName,
@@ -814,7 +830,7 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
       unitCostPrice: i.unitCostPrice,
       repackInfo: i.repackInfo,
       floorStockInfo: i.floorStockInfo,
-      remark: `ยอดยกมา 1 ต.ค. 2569: ${i.rawName} ${i.rawStrength}`
+      remark: `ยอดยกมา ${formatThaiDate(targetDate)}: ${i.rawName} ${i.rawStrength}`
     }));
 
     setCommittingMatches(true);
@@ -823,13 +839,15 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
         items: payloadItems,
         resetBeforeCommit,
         saveMappings,
-        countDate: '2026-10-01'
+        countDate: targetDate
       });
 
       if (res.success) {
-        showNotification(`บันทึกยอดยกมาสำเร็จ ${res.data.count} รายการ! ${res.data.savedMappingsCount ? `(ผูกรหัสยา ${res.data.savedMappingsCount} รายการ)` : ''}`);
+        showNotification(`บันทึกยอดยกมา ณ ${formatThaiDate(targetDate)} สำเร็จ ${res.data.count} รายการ! ${res.data.savedMappingsCount ? `(ผูกรหัสยา ${res.data.savedMappingsCount} รายการ)` : ''}`);
         setShowMatchModal(false);
         await loadAllData();
+        setActiveMode('records');
+        setExpandedRecordDates(prev => ({ ...prev, [targetDate]: true }));
         if (onCountUpdated) onCountUpdated();
       } else {
         showNotification(res.message || 'บันทึกไม่สำเร็จ', true);
@@ -1047,12 +1065,47 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
         </div>
       </div>
 
+      {/* Compact Count Records Summary Banner */}
+      {(summaryData.countRecordsByDate || []).length > 0 && activeMode !== 'records' && (
+        <div className="bg-gradient-to-r from-teal-50 via-emerald-50 to-white p-3.5 rounded-2xl border border-emerald-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 no-print">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 shrink-0">
+              <Calendar className="w-4 h-4" />
+            </div>
+            <div className="text-xs">
+              <div className="font-bold text-emerald-950">
+                บันทึกสต็อกยกมาคลังยาใน ({summaryData.countRecordsByDate.length} รอบวันที่นับ)
+              </div>
+              <div className="text-[11px] text-emerald-800 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                {summaryData.countRecordsByDate.slice(0, 3).map(rec => (
+                  <span key={rec.countDate}>
+                    ณ วันที่ <strong>{formatThaiDate(rec.countDate)}</strong> • {rec.itemCount.toLocaleString()} รายการ ({rec.totalLots.toLocaleString()} Lot) • มูลค่า ฿{rec.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveMode('records');
+              const firstDate = summaryData.countRecordsByDate[0]?.countDate;
+              if (firstDate) setExpandedRecordDates(prev => ({ ...prev, [firstDate]: true }));
+            }}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
+          >
+            <ListOrdered className="w-3.5 h-3.5" />
+            <span>ดูรายการทั้งหมด (จำนวน / Lot / Exp)</span>
+          </button>
+        </div>
+      )}
+
       {/* Mode Switcher Tabs */}
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2 no-print">
-        <div className="flex items-center space-x-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2 no-print">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setActiveMode('grid')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeMode === 'grid'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -1064,7 +1117,7 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
 
           <button
             onClick={() => setActiveMode('single')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               activeMode === 'single'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -1072,6 +1125,22 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
           >
             <PlusCircle className="w-4 h-4" />
             <span>โหมดค้นหาคีย์ทีละรายการ (Single Search)</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveMode('records');
+              const firstDate = (summaryData.countRecordsByDate || [])[0]?.countDate;
+              if (firstDate) setExpandedRecordDates(prev => ({ ...prev, [firstDate]: true }));
+            }}
+            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              activeMode === 'records'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span>บันทึกประวัติการตรวจนับตามวันที่ ({(summaryData.countRecordsByDate || []).length} รอบ)</span>
           </button>
         </div>
 
@@ -1704,6 +1773,161 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
       )}
 
       {/* ========================================================= */}
+      {/* MODE 3: DATE-GROUPED STOCK COUNT RECORDS                   */}
+      {/* ========================================================= */}
+      {activeMode === 'records' && (
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 flex items-center space-x-2">
+                <Calendar className="w-4 h-4 text-emerald-600" />
+                <span>บันทึกการตรวจนับสต็อกยกมาในคลังยาใน (แยกตามวันที่นับ)</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                แสดงรายการยา จำนวนที่นับได้จริงในคลังยาใน เลข Lot และวันหมดอายุ (Exp) ของแต่ละรอบวันที่บันทึก
+              </p>
+            </div>
+
+            <div className="relative w-full sm:w-72">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="ค้นหาชื่อยา, รหัสยา, เลข Lot..."
+                value={recordSearch}
+                onChange={(e) => setRecordSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 focus:bg-white focus:outline-emerald-500 font-medium"
+              />
+            </div>
+          </div>
+
+          {(summaryData.countRecordsByDate || []).length === 0 ? (
+            <div className="bg-white p-12 rounded-2xl border border-dashed border-slate-300 text-center text-slate-400">
+              <Calendar className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+              <div className="text-sm font-bold text-slate-600">ยังไม่มีประวัติการบันทึกยอดยกมา</div>
+              <div className="text-xs text-slate-400 mt-1">สามารถนำเข้าไฟล์ Excel หรือกรอกยอดนับได้จาก 2 โหมดด้านบน</div>
+            </div>
+          ) : (
+            (summaryData.countRecordsByDate || []).map((rec, rIdx) => {
+              const q = recordSearch.trim().toLowerCase();
+              const filteredItems = (rec.items || []).filter(it => {
+                if (!q) return true;
+                return (
+                  String(it.drugcode || '').toLowerCase().includes(q) ||
+                  String(it.drugname || '').toLowerCase().includes(q) ||
+                  (it.lots || []).some(l => String(l.lotno || '').toLowerCase().includes(q))
+                );
+              });
+              const isExpanded = expandedRecordDates[rec.countDate] !== undefined
+                ? expandedRecordDates[rec.countDate]
+                : (rIdx === 0 || Boolean(q));
+
+              return (
+                <div key={rec.countDate} className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedRecordDates(prev => ({ ...prev, [rec.countDate]: !isExpanded }))}
+                    className="w-full px-5 py-4 bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-white hover:from-emerald-100/70 transition-colors flex flex-wrap items-center justify-between gap-3 text-left cursor-pointer"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white font-black text-xs shadow-2xs">
+                        วันที่ {formatThaiDate(rec.countDate)}
+                      </span>
+                      <div>
+                        <div className="text-sm font-black text-slate-900">
+                          การนับสต็อกยกมาคลังยาใน ({rec.countDate})
+                        </div>
+                        <div className="text-xs text-slate-600 mt-0.5">
+                          ผู้บันทึก: <strong>{rec.countedBy}</strong> •{' '}
+                          <strong>{rec.itemCount.toLocaleString()}</strong> รายการยา •{' '}
+                          <strong>{rec.totalLots.toLocaleString()}</strong> Lot •{' '}
+                          มูลค่ารวม <strong className="text-emerald-800">฿{rec.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-700 bg-white px-3 py-1 rounded-lg border border-emerald-200">
+                      {isExpanded ? 'ซ่อนรายการ ▲' : `เปิดดู ${filteredItems.length} รายการ ▼`}
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-slate-200 overflow-x-auto max-h-[580px] overflow-y-auto table-scroll-visible">
+                      <table className="w-full text-left text-xs min-w-[900px]">
+                        <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 sticky top-0 z-10">
+                          <tr>
+                            <th className="py-2.5 px-3 w-12 text-center">#</th>
+                            <th className="py-2.5 px-3 w-28">รหัสยา</th>
+                            <th className="py-2.5 px-3 min-w-[220px]">ชื่อรายการยา</th>
+                            <th className="py-2.5 px-3 w-36 text-right bg-emerald-50 text-emerald-900">จำนวนยกมาคลังใน</th>
+                            <th className="py-2.5 px-3 w-36">Lot No.</th>
+                            <th className="py-2.5 px-3 w-32">วันหมดอายุ (Exp)</th>
+                            <th className="py-2.5 px-3 w-24 text-right">ทุน/หน่วย</th>
+                            <th className="py-2.5 px-3 w-28 text-right">มูลค่า (บาท)</th>
+                            <th className="py-2.5 px-3 min-w-[180px]">หมายเหตุ</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredItems.map((it, idx) => (
+                            <tr key={it.drugcode} className="hover:bg-slate-50/70 align-top">
+                              <td className="py-2.5 px-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-slate-800">{it.drugcode}</td>
+                              <td className="py-2.5 px-3">
+                                <div className="font-bold text-slate-900">{it.drugname}</div>
+                                {it.isDualUnit && (
+                                  <span className="inline-block mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200">
+                                    ยาแบ่งบรรจุ 1 {it.mainStoreUnit} = {it.conversionFactor} {it.counterUnit}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-right bg-emerald-50/20">
+                                <div className="font-mono font-black text-emerald-900 text-sm">
+                                  {Number(it.totalAmount || 0).toLocaleString()} <span className="text-xs font-medium text-slate-600">{it.drugunit}</span>
+                                </div>
+                                {it.isDualUnit && (
+                                  <div className="text-[10px] font-semibold text-purple-700 font-mono">
+                                    (= {(Number(it.totalAmount || 0) * it.conversionFactor).toLocaleString()} {it.counterUnit})
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-slate-800">
+                                {(it.lots || []).map((l, li) => (
+                                  <div key={li} className="leading-relaxed">
+                                    <span className="font-bold">{l.lotno || '-'}</span>
+                                    {(it.lots || []).length > 1 && (
+                                      <span className="text-[10px] text-slate-500 ml-1">({Number(l.amount).toLocaleString()})</span>
+                                    )}
+                                  </div>
+                                ))}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono text-slate-700">
+                                {(it.lots || []).map((l, li) => (
+                                  <div key={li} className="leading-relaxed">{l.dateexpire || 'ไม่ระบุ'}</div>
+                                ))}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                                {(it.lots || []).map((l, li) => (
+                                  <div key={li} className="leading-relaxed">{Number(l.costprice || 0).toFixed(2)}</div>
+                                ))}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                                {Number(it.totalValue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-2.5 px-3 text-[11px] text-slate-600">
+                                {it.remark || (it.lots || []).map(l => l.remark).filter(Boolean).join('; ') || '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ========================================================= */}
       {/* EXCEL UPLOAD MODAL                                        */}
       {/* ========================================================= */}
       {showUploadModal && (
@@ -1811,7 +2035,7 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
                 </span>
                 <div>
                   <h3 className="text-base sm:text-lg font-black tracking-tight">
-                    ตรวจสอบและจับคู่ยาคงเหลือ ณ 1 ต.ค. 2569 (เริ่มต้นปีงบประมาณ 2570)
+                    ตรวจสอบและจับคู่ยาคงเหลือในคลังยาใน ณ {formatThaiDate(matchCountDate)}
                   </h3>
                   <p className="text-xs text-emerald-200/90 mt-0.5">
                     ไฟล์: <span className="font-bold text-white underline">{matchPreviewData?.fileName || 'ไฟล์ Excel ยอดคงเหลือ'}</span> 
@@ -1821,7 +2045,17 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
                 </div>
               </div>
               
-              <div className="flex items-center space-x-2 self-end sm:self-auto">
+              <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+                <label className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-white/10 border border-white/25 rounded-lg text-xs text-white font-semibold">
+                  <Calendar className="w-3.5 h-3.5 text-amber-300" />
+                  <span>วันที่นับคลังใน:</span>
+                  <input
+                    type="date"
+                    value={matchCountDate}
+                    onChange={(e) => setMatchCountDate(e.target.value || '2026-10-01')}
+                    className="bg-white text-slate-900 px-1.5 py-0.5 rounded text-xs font-mono font-bold focus:outline-none"
+                  />
+                </label>
                 <button
                   type="button"
                   onClick={handleOpenMatchModalFromDefault}
@@ -2209,7 +2443,7 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
                   />
                   <span>
                     ล้างยอดยกมาเดิมที่เคยร่างไว้ก่อนหน้าทั้งหมดก่อนบันทึกใหม่ 
-                    <span className="text-slate-400 font-normal"> (แนะนำ เพื่อเริ่มต้นยอด ณ 1 ต.ค. 2569 อย่างถูกต้อง)</span>
+                    <span className="text-slate-400 font-normal"> (แนะนำ เพื่อเริ่มต้นยอด ณ {formatThaiDate(matchCountDate)} อย่างถูกต้อง)</span>
                   </span>
                 </label>
                 <label className="flex items-center space-x-2 text-slate-700 cursor-pointer select-none font-medium">
@@ -2229,7 +2463,7 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
               {/* Execution Summary & Confirm Button */}
               <div className="flex items-center space-x-3 self-end md:self-auto">
                 <div className="text-right">
-                  <div className="text-xs text-slate-500">เลือกนำเข้า</div>
+                  <div className="text-xs text-slate-500">เลือกนำเข้า ณ {formatThaiDate(matchCountDate)}</div>
                   <div className="text-sm font-black text-slate-900">
                     {matchStats.selected} รายการ
                     {matchStats.selectedValue > 0 && (
@@ -2256,7 +2490,7 @@ export default function InitialStockCountView({ user, onCountUpdated }) {
                 >
                   <Save className="w-4 h-4" />
                   <span>
-                    {committingMatches ? 'กำลังบันทึกยอดยกมา...' : `ยืนยันนำเข้ายอดยกมา (${matchStats.selected} รายการ)`}
+                    {committingMatches ? 'กำลังบันทึกยอดยกมา...' : `ยืนยันนำเข้า ณ ${formatThaiDate(matchCountDate)} (${matchStats.selected} รายการ)`}
                   </span>
                 </button>
               </div>

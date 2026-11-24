@@ -1343,7 +1343,7 @@ export default function DashboardView({
                 {renderSortableHeader('ยกมา', 'broughtForward', '95px', 'text-right', 'คลิกเพื่อเรียงตามยอดยกมา', '', '90px')}
                 {renderSortableHeader('รับเข้า', 'totalReceived', '95px', 'text-right', 'คลิกเพื่อเรียงตามยอดรับเข้า Excel', '', '90px')}
                 {renderSortableHeader('จ่ายออก', 'totalDispensed', '105px', 'text-right', 'คลิกเพื่อเรียงตามยอดจ่ายยาจริงใน JHCIS', '', '100px')}
-                {renderSortableHeader('คงเหลือ', 'currentBalance', '115px', 'text-right', 'คลิกเพื่อเรียงตามยอดคงเหลือในคลัง', '', '110px')}
+                {renderSortableHeader('คงเหลือคลังยาใน', 'currentBalance', '130px', 'text-right', 'ยอดคงเหลือจริงในคลังยาใน (= ยกมา + รับเข้า − เบิกไปเคาน์เตอร์) คลิกเพื่อเรียงลำดับ', '', '125px')}
                 {renderSortableHeader('สถานะคลัง', 'status', '130px', 'text-center', 'คลิกเพื่อเรียงตามสถานะความเร่งด่วนของยา', '', '125px')}
                 <th className={`${currentDensity.headerPadding} bg-slate-100 text-center whitespace-nowrap`} style={{ width: '235px', minWidth: '235px' }}>
                   จัดการ
@@ -1660,41 +1660,45 @@ export default function DashboardView({
                         )}
                       </td>
 
-                      {/* 9. คงเหลือ (แสดงติดลบด้วยสีแดง + แยกคลังยาใน/เคาน์เตอร์ถ้ามีการเบิกย่อย) */}
+                      {/* 9. คงเหลือคลังยาใน (แยกคลังยาใน vs เคาน์เตอร์ ไม่นำยอดจ่ายก่อนเบิกมาติดลบคลังใน) */}
                       <td 
                         className={`${currentDensity.cellPadding} text-right align-middle whitespace-nowrap overflow-hidden ${
-                          item.currentBalance < 0 ? 'text-rose-700 bg-rose-50/60' : 'text-slate-900 bg-slate-50/30'
+                          item.mainStoreBalance < 0 ? 'text-rose-700 bg-rose-50/60' : 'text-slate-900 bg-slate-50/30'
                         }`}
-                        style={{ width: '115px', minWidth: '110px' }}
+                        style={{ width: '130px', minWidth: '125px' }}
                         title={
                           item.conversionFactor > 1
-                            ? `รวมทั้ง รพ.สต.: ${item.currentBalance.toLocaleString()} ${item.counterUnit || item.drugunit}\n📦 คลังยาใน: ${(item.mainStoreBalance || 0).toLocaleString()} ${item.mainStoreUnit || 'กระปุก'} (= ${((item.mainStoreBalance || 0) * item.conversionFactor).toLocaleString()} ${item.counterUnit || 'ตลับ'})\n🏥 หน้าเคาน์เตอร์: ${(item.counterBalance || 0).toLocaleString()} ${item.counterUnit || 'ตลับ'}`
+                            ? `📦 คลังยาใน: ${(item.mainStoreBalance || 0).toLocaleString()} ${item.mainStoreUnit || 'กระปุก'} (= ${((item.mainStoreBalance || 0) * item.conversionFactor).toLocaleString()} ${item.counterUnit || 'ตลับ'})\n${item.hasSubstockTransfers ? `🏥 หน้าเคาน์เตอร์ (ตั้งแต่ ${item.firstSubstockDate}): ${(item.counterBalance || 0).toLocaleString()} ${item.counterUnit || 'ตลับ'}` : `🏥 หน้าเคาน์เตอร์: ยังไม่เบิกคลังใน (จ่ายยาเก่าไป ${(item.dispensedBeforeTransfer || 0).toLocaleString()} ${item.counterUnit || 'ตลับ'})`}`
                             : item.hasSubstockTransfers
-                            ? `รวมทั้ง รพ.สต.: ${item.currentBalance.toLocaleString()} ${item.drugunit}\n📦 คลังยาใน: ${(item.mainStoreBalance || 0).toLocaleString()} ${item.drugunit}\n🏥 หน้าเคาน์เตอร์: ${(item.counterBalance || 0).toLocaleString()} ${item.drugunit}`
-                            : item.currentBalance < 0
-                            ? `ยอดคงเหลือติดลบ: ${item.currentBalance.toLocaleString()} ${item.drugunit}\n(จ่ายยามากกว่ายอดรับเข้า/ยอดยกมา)`
-                            : `คงเหลือ: ${item.currentBalance.toLocaleString()} ${item.drugunit}`
+                            ? `📦 คลังยาใน: ${(item.mainStoreBalance || 0).toLocaleString()} ${item.drugunit}\n🏥 หน้าเคาน์เตอร์ (ตั้งแต่ ${item.firstSubstockDate}): ${(item.counterBalance || 0).toLocaleString()} ${item.drugunit}\n🏥 รวมติดตามทั้งหมด: ${item.currentBalance.toLocaleString()} ${item.drugunit}`
+                            : item.mainStoreBalance < 0
+                            ? `คลังยาในติดลบ: ${(item.mainStoreBalance || 0).toLocaleString()} ${item.drugunit}`
+                            : `📦 คลังยาใน: ${(item.mainStoreBalance || 0).toLocaleString()} ${item.drugunit}${item.dispensedBeforeTransfer > 0 ? `\n💊 จ่ายยาเก่าหน้าเคาน์เตอร์ (ไม่หักคลังใน): ${item.dispensedBeforeTransfer.toLocaleString()} ${item.drugunit}` : ''}`
                         }
                       >
                         <div>
-                          <span className={`font-mono font-black ${currentDensity.numText} ${item.currentBalance < 0 ? 'text-rose-700' : 'text-slate-900'}`}>
-                            {item.currentBalance.toLocaleString()}
+                          <span className={`font-mono font-black ${currentDensity.numText} ${item.mainStoreBalance < 0 ? 'text-rose-700' : 'text-slate-900'}`}>
+                            {(item.mainStoreBalance || 0).toLocaleString()}
                           </span>
                           <span className={`font-normal text-slate-500 ml-0.5 ${currentDensity.badge}`}>
-                            {item.conversionFactor > 1 ? (item.counterUnit || item.drugunit) : item.drugunit}
+                            {item.conversionFactor > 1 ? (item.mainStoreUnit || 'กระปุก') : item.drugunit}
                           </span>
                         </div>
-                        {(item.conversionFactor > 1 || item.hasSubstockTransfers) && (
-                          <div className="text-[9.5px] font-mono leading-tight mt-0.5 space-x-1">
-                            <span className="text-emerald-700 font-bold" title="คงเหลือในคลังยาใน (Main Store)">
-                              ใน:{(item.mainStoreBalance || 0).toLocaleString()}{item.conversionFactor > 1 ? ` ${item.mainStoreUnit || 'กระปุก'}` : ''}
-                            </span>
-                            <span className="text-slate-300">|</span>
+                        {item.hasSubstockTransfers ? (
+                          <div className="text-[9.5px] font-mono leading-tight mt-0.5">
                             <span className={`font-bold ${(item.counterBalance || 0) < 0 ? 'text-rose-600' : 'text-blue-700'}`} title="คงเหลือที่จุดจ่ายยาหน้าเคาน์เตอร์">
-                              นอก:{(item.counterBalance || 0).toLocaleString()}{item.conversionFactor > 1 ? ` ${item.counterUnit || 'ตลับ'}` : ''}
+                              เคาน์เตอร์: {(item.counterBalance || 0).toLocaleString()} {item.conversionFactor > 1 ? (item.counterUnit || 'ตลับ') : item.drugunit}
                             </span>
                           </div>
-                        )}
+                        ) : item.conversionFactor > 1 ? (
+                          <div className="text-[9.5px] font-mono leading-tight mt-0.5 text-purple-700 font-semibold">
+                            (= {((item.mainStoreBalance || 0) * item.conversionFactor).toLocaleString()} {item.counterUnit || 'ตลับ'})
+                          </div>
+                        ) : item.dispensedBeforeTransfer > 0 ? (
+                          <div className="text-[9px] leading-tight mt-0.5 text-amber-700 font-medium" title="ยอดจ่ายผู้ป่วยใน JHCIS ก่อนเบิกคลังใน (ใช้ยาเก่าหน้าเคาน์เตอร์)">
+                            ยาเก่าเคาน์เตอร์ -{item.dispensedBeforeTransfer.toLocaleString()}
+                          </div>
+                        ) : null}
                       </td>
 
                       {/* 10. สถานะคลัง (Compact Badges — ไม่ล้นคอลัมน์) */}
