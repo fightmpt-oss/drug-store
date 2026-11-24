@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { memoryStore, saveMappings } = require('../config/db');
+const { memoryStore, saveMappings, getPcuCode } = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
 
 // ทุก route ต้อง login
@@ -14,19 +14,29 @@ function normalizeKey(str) {
     .trim();
 }
 
-// Get all mappings
+function matchesCurrentPcu(mapping, currentPcu) {
+  return !mapping.pcucode || !currentPcu || mapping.pcucode === currentPcu;
+}
+
+// Get all mappings (scoped strictly to active PCU)
 router.get('/', (req, res) => {
-  const list = (memoryStore.drugMappings || []).map((m, idx) => ({
-    ...m,
-    id: m.id || `map_${idx}_${m.hosdrugcode || normalizeKey(m.hospitalDrugName || m.drugname)}`
-  }));
+  const currentPcu = getPcuCode() || '';
+  const list = (memoryStore.drugMappings || [])
+    .filter(m => matchesCurrentPcu(m, currentPcu))
+    .map((m, idx) => ({
+      ...m,
+      id: m.id || `map_${idx}_${m.hosdrugcode || normalizeKey(m.hospitalDrugName || m.drugname)}`
+    }));
   res.json({ success: true, data: list });
 });
 
 // Create or update single mapping
 router.post('/', (req, res) => {
   try {
-    const { hosdrugcode, jhcisdrugcode, drugname, hospitalDrugName, matchedDrugName, tmtid } = req.body;
+    const {
+      hosdrugcode, jhcisdrugcode, drugname, hospitalDrugName, matchedDrugName, tmtid,
+      isLocalOnly, countByPack, localUnit
+    } = req.body;
     const rawName = (hospitalDrugName || drugname || '').trim();
     const hosCode = (hosdrugcode || '').trim();
 
@@ -34,40 +44,48 @@ router.post('/', (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณาระบุรหัสยาหรือชื่อยา รพ. และรหัสยา JHCIS' });
     }
 
+    const currentPcu = getPcuCode() || '';
     const normName = normalizeKey(rawName);
     const normHosCode = hosCode.toLowerCase();
 
     let idx = memoryStore.drugMappings.findIndex(m => {
+      if (!matchesCurrentPcu(m, currentPcu)) return false;
       if (normHosCode && m.hosdrugcode && m.hosdrugcode.toLowerCase() === normHosCode) return true;
       const mNorm = normalizeKey(m.hospitalDrugName || m.drugname);
       if (normName && mNorm && mNorm === normName) return true;
       return false;
     });
 
+    const targetCode = String(jhcisdrugcode).trim();
+    const prev = idx >= 0 ? memoryStore.drugMappings[idx] : {};
     const mappingObj = {
-      id: `map_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: prev.id || `map_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      pcucode: currentPcu,
       hosdrugcode: hosCode,
       hospitalDrugName: rawName,
       drugname: rawName,
-      jhcisdrugcode: String(jhcisdrugcode).trim(),
-      matchedDrugCode: String(jhcisdrugcode).trim(),
+      jhcisdrugcode: targetCode,
+      matchedDrugCode: targetCode,
       matchedDrugName: matchedDrugName || '',
       tmtid: tmtid || '',
+      countByPack: countByPack !== undefined ? Boolean(countByPack) : Boolean(prev.countByPack),
+      isLocalOnly: isLocalOnly !== undefined ? Boolean(isLocalOnly) : (Boolean(prev.isLocalOnly) || targetCode.startsWith('LOCAL-')),
+      localUnit: localUnit !== undefined ? String(localUnit || '') : (prev.localUnit || ''),
       updatedAt: new Date().toISOString()
     };
 
     if (idx >= 0) {
       memoryStore.drugMappings[idx] = {
-        ...memoryStore.drugMappings[idx],
+        ...prev,
         ...mappingObj,
-        createdAt: memoryStore.drugMappings[idx].createdAt || new Date().toISOString()
+        createdAt: prev.createdAt || new Date().toISOString()
       };
     } else {
       mappingObj.createdAt = new Date().toISOString();
       memoryStore.drugMappings.push(mappingObj);
     }
 
-    saveMappings();
+    saveMappings('บันทึกการจับคู่ยา (mapping)', req.user?.displayName || 'user');
     res.json({ success: true, message: 'บันทึกการจับคู่รหัสยาสำเร็จ (ระบบจะจดจำสำหรับการนำเข้าครั้งถัดไป)', data: mappingObj });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -82,6 +100,7 @@ router.post('/batch', (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณาระบุรายการจับคู่ที่ต้องการบันทึก' });
     }
 
+    const currentPcu = getPcuCode() || '';
     let savedCount = 0;
     for (const item of mappings) {
       const rawName = (item.hospitalDrugName || item.drugname || '').trim();
@@ -94,14 +113,17 @@ router.post('/batch', (req, res) => {
       const normHosCode = hosCode.toLowerCase();
 
       let idx = memoryStore.drugMappings.findIndex(m => {
+        if (!matchesCurrentPcu(m, currentPcu)) return false;
         if (normHosCode && m.hosdrugcode && m.hosdrugcode.toLowerCase() === normHosCode) return true;
         const mNorm = normalizeKey(m.hospitalDrugName || m.drugname);
         if (normName && mNorm && mNorm === normName) return true;
         return false;
       });
 
+      const prev = idx >= 0 ? memoryStore.drugMappings[idx] : {};
       const mappingObj = {
-        id: `map_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        id: prev.id || `map_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        pcucode: currentPcu,
         hosdrugcode: hosCode,
         hospitalDrugName: rawName,
         drugname: rawName,
@@ -109,14 +131,17 @@ router.post('/batch', (req, res) => {
         matchedDrugCode: jhcisCode,
         matchedDrugName: item.matchedDrugName || '',
         tmtid: item.tmtid || '',
+        countByPack: item.countByPack !== undefined ? Boolean(item.countByPack) : Boolean(prev.countByPack),
+        isLocalOnly: item.isLocalOnly !== undefined ? Boolean(item.isLocalOnly) : (Boolean(prev.isLocalOnly) || jhcisCode.startsWith('LOCAL-')),
+        localUnit: item.localUnit !== undefined ? String(item.localUnit || '') : (prev.localUnit || ''),
         updatedAt: new Date().toISOString()
       };
 
       if (idx >= 0) {
         memoryStore.drugMappings[idx] = {
-          ...memoryStore.drugMappings[idx],
+          ...prev,
           ...mappingObj,
-          createdAt: memoryStore.drugMappings[idx].createdAt || new Date().toISOString()
+          createdAt: prev.createdAt || new Date().toISOString()
         };
       } else {
         mappingObj.createdAt = new Date().toISOString();
@@ -126,7 +151,7 @@ router.post('/batch', (req, res) => {
     }
 
     if (savedCount > 0) {
-      saveMappings();
+      saveMappings(`บันทึกการจับคู่ยาแบบกลุ่ม (${savedCount} รายการ)`, req.user?.displayName || 'user');
     }
 
     res.json({ success: true, message: `บันทึกการจับคู่รหัสยาสำเร็จ ${savedCount} รายการ`, savedCount });
@@ -135,14 +160,16 @@ router.post('/batch', (req, res) => {
   }
 });
 
-// Delete mapping by ID, hoscode, or normalized drugname
+// Delete mapping by ID, hoscode, or normalized drugname (scoped strictly to current PCU)
 router.delete('/:id', (req, res) => {
   try {
     const rawId = decodeURIComponent(req.params.id || '').trim();
     const normId = normalizeKey(rawId);
+    const currentPcu = getPcuCode() || '';
 
     const initialLen = memoryStore.drugMappings.length;
     memoryStore.drugMappings = memoryStore.drugMappings.filter(m => {
+      if (!matchesCurrentPcu(m, currentPcu)) return true;
       if (m.id && m.id === rawId) return false;
       if (m.hosdrugcode && m.hosdrugcode === rawId) return false;
       const mNorm = normalizeKey(m.hospitalDrugName || m.drugname);
@@ -151,7 +178,7 @@ router.delete('/:id', (req, res) => {
     });
 
     if (memoryStore.drugMappings.length !== initialLen) {
-      saveMappings();
+      saveMappings('ลบรายการจับคู่ยา', req.user?.displayName || 'user');
     }
 
     res.json({ success: true, message: 'ลบการจับคู่สำเร็จ' });

@@ -657,63 +657,14 @@ function generateHerbsUpdateSql(items = []) {
 }
 
 /**
- * Apply updates directly to JHCIS cdrug table
+ * Direct writes to JHCIS cdrug table are disabled (100% Read-Only Policy).
+ * Use generateHerbsUpdateSql() instead.
  */
-async function applyDirectUpdates(updates = []) {
-  if (!isLive()) {
-    return {
-      success: true,
-      mode: 'demo',
-      updatedCount: updates.length,
-      message: `โหมดจำลอง (Demo): จำลองการอัปเดตสำเร็จ ${updates.length} รายการ`
-    };
-  }
-
-  const pool = getPool();
-  const conn = await pool.getConnection();
-
-  try {
-    await conn.beginTransaction();
-
-    let updatedCount = 0;
-    for (const u of updates) {
-      const drugcode = cleanStr(u.drugcode);
-      const code24 = cleanCode24(u.code24);
-      const tmt = cleanTmt(u.tmt);
-
-      if (!drugcode) continue;
-
-      const sets = [];
-      const params = [];
-
-      if (code24) {
-        sets.push('drugcode24 = ?');
-        params.push(code24);
-      }
-      if (tmt) {
-        sets.push('tmtcode = ?', 'tmtcodedateupdate = NOW()');
-        params.push(tmt);
-      }
-
-      if (sets.length > 0) {
-        params.push(drugcode);
-        const [res] = await conn.query(`UPDATE cdrug SET ${sets.join(', ')} WHERE drugcode = ?`, params);
-        if (res.affectedRows > 0) updatedCount++;
-      }
-    }
-
-    await conn.commit();
-    return {
-      success: true,
-      updatedCount,
-      message: `อัปเดตข้อมูลลงฐาน JHCIS สำเร็จเรียบร้อย (${updatedCount} รายการ)`
-    };
-  } catch (err) {
-    await conn.rollback();
-    throw new Error(`เกิดข้อผิดพลาดในการบันทึกฐานข้อมูล: ${err.message}`);
-  } finally {
-    conn.release();
-  }
+async function applyDirectUpdates() {
+  const err = new Error('ระบบยึดนโยบายอ่านฐานข้อมูล JHCIS อย่างเดียว (Read-Only 100%) — กรุณาสร้างไฟล์สคริปต์ .sql ไปรันด้วยตนเอง');
+  err.status = 403;
+  err.code = 'READ_ONLY_POLICY';
+  throw err;
 }
 
 module.exports = {

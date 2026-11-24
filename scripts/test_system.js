@@ -206,7 +206,7 @@ async function run() {
     countDate: '2026-05-01', countedBy: 'tester'
   }, STAFF_TOKEN);
   if (!saveFefo.data.success) console.log('DEBUG saveFefo:', saveFefo.status, JSON.stringify(saveFefo.data));
-  const cardFefo = await api('GET', '/api/stock/card/0002?startDate=2026-05-01&endDate=2026-12-31', null, TOKEN);
+  const cardFefo = await api('GET', '/api/stock/card/0002?startDate=2026-05-01&endDate=2026-12-31&mode=total_pcu', null, TOKEN);
   const fefoLots = cardFefo.data.data?.lotsSummary || [];
   const lc = fefoLots.find(l => l.lotno === 'LC-FEFO');
   const ld = fefoLots.find(l => l.lotno === 'LD-KEEP');
@@ -358,9 +358,20 @@ async function run() {
       { drugcode: '410000000047000002011376', code24: '410000000479150020182750', tmt: '9094251' }
     ]
   }, TOKEN);
-  log('DTAM: admin ปรับปรุงรหัสสมุนไพรลงฐาน (apply-updates) → 200',
-    dtamApply.status === 200 && dtamApply.data.success === true,
-    `updatedCount=${dtamApply.data.data?.updatedCount}`);
+  log('DTAM: ปิดการเขียนตรง cdrug (apply-updates) → 403 Read-Only Policy',
+    dtamApply.status === 403 && dtamApply.data?.code === 'READ_ONLY_POLICY',
+    `status=${dtamApply.status}, code=${dtamApply.data?.code}`);
+
+  // ---------- 12.6 Security Regression Guards (A3 Substock DELETE + Backup Download) ----------
+  const substockDelUnauth = await api('DELETE', '/api/stock/substock/transfer/nonexistent');
+  log('SECURITY: DELETE /api/stock/substock/transfer/* ไม่แนบ token → 401',
+    substockDelUnauth.status === 401 && substockDelUnauth.data?.code === 'UNAUTHENTICATED',
+    `status=${substockDelUnauth.status}, code=${substockDelUnauth.data?.code}`);
+
+  const staffBackupDl = await api('GET', '/api/settings/backups/download/config_latest.json', null, STAFF_TOKEN);
+  log('SECURITY: staff ดาวน์โหลดไฟล์ backup → 403 (admin only)',
+    staffBackupDl.status === 403 && staffBackupDl.data?.code === 'FORBIDDEN',
+    `status=${staffBackupDl.status}, code=${staffBackupDl.data?.code}`);
 
   // ---------- 13. PERSISTENCE: รีสตาร์ทแล้วข้อมูลต้องอยู่ ----------
   await stopServer();

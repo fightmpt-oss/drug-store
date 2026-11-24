@@ -230,6 +230,19 @@ function saveMappings(reason = 'บันทึกการจับคู่ย
   } catch (e) {}
 }
 
+function reloadMappings() {
+  if (fs.existsSync(MAPPING_FILE)) {
+    try {
+      memoryStore.drugMappings = JSON.parse(fs.readFileSync(MAPPING_FILE, 'utf8'));
+    } catch (e) {
+      memoryStore.drugMappings = [];
+    }
+  } else {
+    memoryStore.drugMappings = [];
+  }
+  return memoryStore.drugMappings;
+}
+
 async function testConnection(testCfg) {
   try {
     const conn = await mysql.createConnection({
@@ -316,6 +329,24 @@ async function saveConfig(newConfig, actor = 'admin') {
   return getConfig();
 }
 
+async function reloadConfig() {
+  let reloaded = { ...defaultConfig };
+  if (fs.existsSync(CONFIG_FILE)) {
+    try {
+      const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
+      reloaded = { ...defaultConfig, ...JSON.parse(raw) };
+    } catch (err) {
+      console.error('Error reloading config.json, using defaults:', err.message);
+    }
+  }
+  if (process.env.JHCIS_MODE) {
+    reloaded.mode = process.env.JHCIS_MODE;
+  }
+  currentConfig = reloaded;
+  await initPool(currentConfig);
+  return getConfig();
+}
+
 function getConfig() {
   return {
     ...currentConfig,
@@ -353,10 +384,12 @@ module.exports = {
   initPool,
   testConnection,
   saveConfig,
+  reloadConfig,
   getConfig,
   getSchemaStatus,
   memoryStore,
   saveMappings,
+  reloadMappings,
   getPool: () => pool,
   getPcuCode: () => currentConfig.pcucode || detectedPcuCode,
   isLive,

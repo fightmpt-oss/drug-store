@@ -136,8 +136,8 @@ router.post('/backups/create', (req, res) => {
   }
 });
 
-// GET /api/settings/backups/download/:filename — ดาวน์โหลดไฟล์สำรองข้อมูล
-router.get('/backups/download/:filename', (req, res) => {
+// GET /api/settings/backups/download/:filename — ดาวน์โหลดไฟล์สำรองข้อมูล (Admin only)
+router.get('/backups/download/:filename', requireAdmin, (req, res) => {
   try {
     const filename = path.basename(req.params.filename);
     const filePath = path.join(backupService.BACKUP_DIR, filename);

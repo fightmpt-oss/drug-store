@@ -459,11 +459,21 @@ function deleteSubstockTransfer(id, actor) {
   });
 }
 
+function reloadAllStores() {
+  receiptsStore.reload();
+  adjustmentsStore.reload();
+  countsStore.reload();
+  countsAuditStore.reload();
+  drugSettingsStore.reload();
+  substockTransfersStore.reload();
+}
+
 module.exports = {
   receiptsStore, adjustmentsStore, countsStore, drugSettingsStore, substockTransfersStore,
   saveReceipt, findReceipts, listReceipts, itemDispenseUnits,
   saveAdjustment, listAdjustments, ADJUST_CATEGORIES,
   saveStockCount, saveStockCountsBatch, getStockCounts, getStockCount, getCountAudit, deleteStockCount, resetStockCounts,
   getDrugSettings, setDrugSettings,
-  saveSubstockTransfer, listSubstockTransfers, deleteSubstockTransfer
+  saveSubstockTransfer, listSubstockTransfers, deleteSubstockTransfer,
+  reloadAllStores
 };

@@ -25,7 +25,7 @@ import { api } from '../services/api';
 
 export default function SettingsView({ onConfigUpdated, onRequireRelogin }) {
   const [config, setConfig] = useState({
-    host: '192.168.1.253',
+    host: 'localhost',
     port: 3333,
     user: 'root',
     password: '',

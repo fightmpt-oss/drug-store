@@ -1529,7 +1529,7 @@ async function getVarianceReport(asOfDate) {
   const counts = getStockCounts();
   const today = new Date().toISOString().slice(0, 10);
   const target = asOfDate || today;
-  const drugs = await getAllJhcisDrugs();
+  const drugs = await getAllDrugsWithLocal();
   const drugMap = {};
   drugs.forEach(d => { drugMap[d.drugcode] = d; });
 

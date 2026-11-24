@@ -47,17 +47,17 @@ if (fs.existsSync(STAGING_DIR)) {
 }
 fs.mkdirSync(STAGING_DIR, { recursive: true });
 
-// Helper to copy recursively
-function copyDir(src, dest, ignoreDirs = []) {
+// Helper to copy recursively (skips ignored dir or file names)
+function copyDir(src, dest, ignoreNames = []) {
   if (!fs.existsSync(src)) return;
   fs.mkdirSync(dest, { recursive: true });
   const entries = fs.readdirSync(src, { withFileTypes: true });
   for (const entry of entries) {
-    if (ignoreDirs.includes(entry.name)) continue;
+    if (ignoreNames.includes(entry.name)) continue;
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
-      copyDir(srcPath, destPath, ignoreDirs);
+      copyDir(srcPath, destPath, ignoreNames);
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
@@ -67,34 +67,34 @@ function copyDir(src, dest, ignoreDirs = []) {
 // 3. Copy files to staging root
 console.log('[2/6] Copying project files & runtime...');
 
-// 3a. Node portable binary + cloudflared tunnel binary
+// 3a. Node portable binary
 const binDir = path.join(STAGING_DIR, 'bin');
 fs.mkdirSync(binDir, { recursive: true });
 const systemNode = process.execPath;
 fs.copyFileSync(systemNode, path.join(binDir, 'node.exe'));
 console.log('      Bundled: bin/node.exe');
-const cloudflaredSrc = path.join(PROJECT_ROOT, 'bin', 'cloudflared.exe');
-if (fs.existsSync(cloudflaredSrc)) {
-  fs.copyFileSync(cloudflaredSrc, path.join(binDir, 'cloudflared.exe'));
-  console.log('      Bundled: bin/cloudflared.exe (Online HTTPS Mobile Tunnel)');
-}
 
-// 3b. Backend
-copyDir(path.join(PROJECT_ROOT, 'backend'), path.join(STAGING_DIR, 'backend'), ['uploads']);
+// 3b. Backend (Clean Template: skip uploads & inspect_cdrug.js; keep both DTAM files)
+copyDir(path.join(PROJECT_ROOT, 'backend'), path.join(STAGING_DIR, 'backend'), ['uploads', 'inspect_cdrug.js']);
 fs.mkdirSync(path.join(STAGING_DIR, 'backend', 'uploads'), { recursive: true });
 
-// Ensure clean backend localdb & data in staging (no previous health center data/sessions/logs)
+// Ensure clean backend localdb, config & mappings in staging (no previous health center data/sessions/logs)
 const stagingDataDir = path.join(STAGING_DIR, 'backend', 'src', 'data');
 const stagingLocalDb = path.join(stagingDataDir, 'localdb');
-if (fs.existsSync(path.join(stagingDataDir, 'initial_stock.json'))) {
-  fs.unlinkSync(path.join(stagingDataDir, 'initial_stock.json'));
+for (const f of [
+  path.join(STAGING_DIR, 'backend', 'config.json'),
+  path.join(STAGING_DIR, 'config.json'),
+  path.join(stagingDataDir, 'mappings.json'),
+  path.join(stagingDataDir, 'initial_stock.json')
+]) {
+  if (fs.existsSync(f)) fs.unlinkSync(f);
 }
 if (fs.existsSync(stagingLocalDb)) {
   fs.rmSync(stagingLocalDb, { recursive: true, force: true });
 }
 fs.mkdirSync(stagingLocalDb, { recursive: true });
 
-// Clean config template for other health centers (auto-detects PCU from connected database)
+// Clean config template written ONLY to config.example.json so Safe Upgrade never overwrites live config.json
 const cleanConfig = {
   host: "localhost",
   port: 3333,
@@ -117,9 +117,8 @@ const cleanConfig = {
   ],
   receiptSource: "local"
 };
-fs.writeFileSync(path.join(STAGING_DIR, 'backend', 'config.json'), JSON.stringify(cleanConfig, null, 2), 'utf8');
-fs.writeFileSync(path.join(STAGING_DIR, 'config.json'), JSON.stringify(cleanConfig, null, 2), 'utf8');
-console.log('      Copied: backend/ (clean configuration & fresh localdb)');
+fs.writeFileSync(path.join(STAGING_DIR, 'backend', 'config.example.json'), JSON.stringify(cleanConfig, null, 2), 'utf8');
+console.log('      Copied: backend/ (Clean Template — DTAM included, no PCU data, Safe Upgrade config.example.json)');
 
 // 3c. Frontend production build (always build fresh to include latest UI updates)
 const frontendDist = path.join(PROJECT_ROOT, 'frontend', 'dist');
@@ -192,18 +191,49 @@ if (fs.existsSync(path.join(PROJECT_ROOT, 'package.json'))) {
 // install_finish.vbs (UTF-16LE with BOM — runs via wscript.exe with ZERO black CMD window!)
 const installFinishVbsLines = [
   '\' ========================================================================',
-  '\' Post-Install Setup: Creates Desktop & Start Menu Shortcuts with Green Icon',
+  '\' Post-Install Setup: Safe Upgrade config/mappings initialization,',
+  '\' creates Desktop & Start Menu Shortcuts with Green Icon,',
   '\' and optionally launches the app immediately without any CMD window',
   '\' ========================================================================',
   'Option Explicit',
   'Dim WshShell, fso, appDir, icoPath, wscriptExe, vbsPath, desktopDir, startProgramsDir, startMenuFolder, scDesktop, scStart, ans',
+  'Dim cfgPath, legacyCfgPath, exampleCfgPath, mapPath, localDbDir, mapFile, silentMode, arg',
   'Set WshShell = CreateObject("WScript.Shell")',
   'Set fso = CreateObject("Scripting.FileSystemObject")',
+  '',
+  'silentMode = False',
+  'For Each arg In WScript.Arguments',
+  '    If LCase(arg) = "--silent" Then silentMode = True',
+  'Next',
   '',
   'appDir = fso.GetParentFolderName(WScript.ScriptFullName)',
   'icoPath = appDir & "\\drug-store.ico,0"',
   'wscriptExe = WshShell.ExpandEnvironmentStrings("%SystemRoot%\\System32\\wscript.exe")',
   'vbsPath = appDir & "\\START_SILENT.vbs"',
+  '',
+  '\' 0. Safe Upgrade: Initialize backend\\config.json & mappings.json ONLY if missing',
+  'localDbDir = appDir & "\\backend\\src\\data\\localdb"',
+  'If Not fso.FolderExists(localDbDir) Then',
+  '    fso.CreateFolder localDbDir',
+  'End If',
+  '',
+  'cfgPath = appDir & "\\backend\\config.json"',
+  'legacyCfgPath = appDir & "\\config.json"',
+  'exampleCfgPath = appDir & "\\backend\\config.example.json"',
+  'If Not fso.FileExists(cfgPath) Then',
+  '    If fso.FileExists(legacyCfgPath) Then',
+  '        fso.CopyFile legacyCfgPath, cfgPath, False',
+  '    ElseIf fso.FileExists(exampleCfgPath) Then',
+  '        fso.CopyFile exampleCfgPath, cfgPath, False',
+  '    End If',
+  'End If',
+  '',
+  'mapPath = appDir & "\\backend\\src\\data\\mappings.json"',
+  'If Not fso.FileExists(mapPath) Then',
+  '    Set mapFile = fso.CreateTextFile(mapPath, False, False)',
+  '    mapFile.Write "[]"',
+  '    mapFile.Close',
+  'End If',
   '',
   '\' 1. Create Desktop Shortcut with Modern Green Drug Store Icon',
   'desktopDir = WshShell.SpecialFolders("Desktop")',
@@ -233,16 +263,19 @@ const installFinishVbsLines = [
   'scStart.Save',
   'On Error GoTo 0',
   '',
-  '\' 3. Prompt user to launch immediately',
-  'ans = MsgBox("ติดตั้งระบบบริหารคลังยา รพ.สต. (JHCIS Drug Stock) สำเร็จเรียบร้อยแล้ว!" & vbCrLf & vbCrLf & _',
-  '             "• โฟลเดอร์ติดตั้ง: " & appDir & vbCrLf & _',
-  '             "• สร้างไอคอน [JHCIS Drug Stock] รูปคลังยาสีเขียวไว้ที่หน้าจอ Desktop และเมนู Start เรียบร้อยแล้ว" & vbCrLf & _',
-  '             "• เปิดทำงานผ่านไอคอนได้ทันทีโดยไม่มีหน้าต่างจอดำ (CMD)" & vbCrLf & vbCrLf & _',
-  '             "ต้องการเปิดเข้าใช้งานโปรแกรมคลังยา รพ.สต. ตอนนี้เลยหรือไม่?", _',
-  '             vbYesNo + vbInformation, "ติดตั้งสำเร็จ (JHCIS Drug Stock)")',
+  '\' 3. Prompt user to launch immediately (skipped only if --silent)',
+  'If Not silentMode Then',
+  '    ans = MsgBox("ติดตั้งระบบบริหารคลังยา รพ.สต. (JHCIS Drug Stock) สำเร็จเรียบร้อยแล้ว!" & vbCrLf & vbCrLf & _',
+  '                 "• โฟลเดอร์ติดตั้ง: " & appDir & vbCrLf & _',
+  '                 "• กรณีอัปเกรดทับของเดิม: รักษา config.json, mappings.json และข้อมูลสต็อกเดิมไว้ครบถ้วน" & vbCrLf & _',
+  '                 "• สร้างไอคอน [JHCIS Drug Stock] รูปคลังยาสีเขียวไว้ที่หน้าจอ Desktop และเมนู Start เรียบร้อยแล้ว" & vbCrLf & _',
+  '                 "• เปิดทำงานผ่านไอคอนได้ทันทีโดยไม่มีหน้าต่างจอดำ (CMD)" & vbCrLf & vbCrLf & _',
+  '                 "ต้องการเปิดเข้าใช้งานโปรแกรมคลังยา รพ.สต. ตอนนี้เลยหรือไม่?", _',
+  '                 vbYesNo + vbInformation, "ติดตั้งสำเร็จ (JHCIS Drug Stock)")',
   '',
-  'If ans = vbYes Then',
-  '    WshShell.Run """" & wscriptExe & """ //nologo """ & vbsPath & """", 0, False',
+  '    If ans = vbYes Then',
+  '        WshShell.Run """" & wscriptExe & """ //nologo """ & vbsPath & """", 0, False',
+  '    End If',
   'End If'
 ];
 
@@ -269,10 +302,12 @@ const sfxCommentLines = [
   '   C:\\Drug Store',
   '',
   'คุณสมบัติการติดตั้ง:',
+  '• รองรับทั้งติดตั้งใหม่และการอัปเกรดทับเครื่องเดิม (หยุดเซิร์ฟเวอร์เดิมอัตโนมัติ ไม่ทับค่าตั้งค่า/ข้อมูลเดิม)',
   '• สร้างไอคอนรูปคลังยาสีเขียว "JHCIS Drug Stock" บนหน้าจอ Desktop และเมนู Start อัตโนมัติ',
   '• เปิดใช้งานผ่านไอคอนได้ทันทีแบบไร้หน้าต่างจอดำ (No CMD Window)',
-  '• รองรับการนำเข้าใบรับยาทั้งไฟล์ PDF และ Excel พร้อมเชื่อมต่อฐานข้อมูล JHCIS อัตโนมัติ',
+  '• อ่านฐานข้อมูล JHCIS แบบ Read-Only 100% พร้อมระบบสำรองข้อมูลและนำเข้า Excel/PDF อัตโนมัติ',
   '}',
+  'Presetup=powershell.exe -NoProfile -WindowStyle Hidden -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"',
   'Setup=wscript.exe //nologo install_finish.vbs',
   'Overwrite=1'
 ];

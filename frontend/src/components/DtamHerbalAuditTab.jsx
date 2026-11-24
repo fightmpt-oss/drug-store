@@ -18,7 +18,6 @@ import {
   Info,
   SlidersHorizontal,
   FileCode2,
-  CheckCheck,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -50,10 +49,11 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
   const [modalSearchResults, setModalSearchResults] = useState([]);
   const [modalSearching, setModalSearching] = useState(false);
 
-  // Direct Update / Apply state
+  // Read-Only SQL Preview & Download Modal state
   const [showApplyModal, setShowApplyModal] = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [generatingSql, setGeneratingSql] = useState(false);
   const [itemsToUpdate, setItemsToUpdate] = useState([]);
+  const [generatedSqlInfo, setGeneratedSqlInfo] = useState(null);
 
   // SQL quick copy
   const [copiedSql, setCopiedSql] = useState(false);
@@ -173,42 +173,57 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
     setSelectedTargetDrug(null);
   };
 
-  const handlePrepareUpdates = () => {
+  const handlePrepareUpdates = async () => {
     if (!auditData?.items) return;
-    const candidates = auditData.items.filter(item => 
-      (item.status === 'tmt_mismatch' || 
-       item.status === 'code24_mismatch' || 
-       item.status === 'manually_matched' || 
+    const candidates = auditData.items.filter(item =>
+      (item.status === 'tmt_mismatch' ||
+       item.status === 'code24_mismatch' ||
+       item.status === 'manually_matched' ||
        (item.status === 'unregistered' && item.suggestedCode24)) &&
       (item.suggestedCode24 || item.suggestedTmt)
     );
     setItemsToUpdate(candidates);
+    setGeneratedSqlInfo(null);
     setShowApplyModal(true);
-  };
+    if (candidates.length === 0) return;
 
-  const handleExecuteUpdates = async () => {
-    if (itemsToUpdate.length === 0) return;
-    setApplying(true);
+    setGeneratingSql(true);
     setError(null);
     try {
-      const payload = itemsToUpdate.map(item => ({
-        drugcode: item.drugcode,
-        code24: item.suggestedCode24 || item.currentCode24,
-        tmt: item.suggestedTmt || item.currentTmt
-      }));
-
-      const res = await api.applyDtamUpdates(payload);
-      if (res.success) {
-        setSuccessMsg(res.data.message || `อัปเดตลงฐานข้อมูล JHCIS เรียบร้อยแล้ว ${res.data.updatedCount} รายการ`);
-        setShowApplyModal(false);
-        await loadDtamData(false);
+      const res = await api.generateDtamSql(candidates);
+      if (res.success && res.data?.sql) {
+        setGeneratedSqlInfo(res.data);
       } else {
-        setError(res.message || 'เกิดข้อผิดพลาดในการอัปเดตฐานข้อมูล');
+        setError(res.message || res.error || 'เกิดข้อผิดพลาดในการสร้างสคริปต์ SQL');
       }
     } catch (err) {
-      setError(err.message || 'ไม่สามารถบันทึกการแก้ไขลงฐาน JHCIS ได้');
+      setError(err.message || 'ไม่สามารถสร้างสคริปต์ SQL ได้');
     } finally {
-      setApplying(false);
+      setGeneratingSql(false);
+    }
+  };
+
+  const handleDownloadSqlFile = () => {
+    if (!generatedSqlInfo?.sql) return;
+    const blob = new Blob([generatedSqlInfo.sql], { type: 'application/sql;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dtam_update_cdrug_${new Date().toISOString().slice(0, 10)}.sql`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyModalSql = async () => {
+    if (!generatedSqlInfo?.sql) return;
+    try {
+      await navigator.clipboard.writeText(generatedSqlInfo.sql);
+      setCopiedSql(true);
+      setTimeout(() => setCopiedSql(false), 2500);
+    } catch (e) {
+      alert('ไม่สามารถคัดลอก SQL ได้: ' + e.message);
     }
   };
 
@@ -691,14 +706,14 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
             )}
           </div>
 
-          {/* Quick Action: Apply Updates */}
+          {/* Quick Action: Preview & Download SQL Script (Read-Only 100%) */}
           <button
             type="button"
             onClick={handlePrepareUpdates}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-xs transition-colors shrink-0 cursor-pointer"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>ปรับปรุงฐาน JHCIS</span>
+            <FileCode2 className="w-4 h-4" />
+            <span>สร้างสคริปต์ SQL ปรับปรุง cdrug</span>
           </button>
 
           {/* Quick Action: Copy SQL */}
@@ -1073,53 +1088,80 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
         </div>
       )}
 
-      {/* 6. MODAL: Direct Update Confirmation */}
+      {/* 6. MODAL: Read-Only SQL Preview & Download (No Direct JHCIS Write) */}
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                <Sparkles className="w-5 h-5" />
+                <FileCode2 className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-lg sm:text-xl font-black text-slate-900">
-                  ยืนยันการปรับปรุงฐานข้อมูล JHCIS
+                  สคริปต์ SQL ปรับปรุงรหัสสมุนไพรในตาราง cdrug
                 </h3>
                 <p className="text-xs text-slate-500">
-                  ระบบจะทำการอัปเดตฟิลด์ <code className="font-mono font-bold text-blue-700">drugcode24</code> และ <code className="font-mono font-bold text-blue-700">tmtcode</code> ในตาราง <code className="font-mono font-bold text-blue-700">cdrug</code>
+                  โหมด <span className="font-bold text-emerald-700">Read-Only 100%</span> — ระบบไม่อัปเดตฐาน <code className="font-mono font-bold text-blue-700">jhcisdb</code> โดยตรง กรุณาดาวน์โหลดไฟล์ <code className="font-mono font-bold text-blue-700">.sql</code> ไปตรวจสอบและรันด้วยตนเอง (มีคำสั่งสำรองตาราง <code className="font-mono font-bold text-blue-700">{generatedSqlInfo?.backupTable || 'cdrug_dtam_bk_*'}</code> ให้อัตโนมัติ)
                 </p>
               </div>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2 max-h-56 overflow-y-auto">
-              <div className="font-bold text-slate-900">รายการที่จะได้รับการอัปเดต ({itemsToUpdate.length} รายการ):</div>
-              {itemsToUpdate.map((it, idx) => (
-                <div key={idx} className="flex justify-between items-center text-[11px] py-1 border-b border-slate-200/60 last:border-0">
-                  <span className="font-medium text-slate-800">{it.drugname}</span>
-                  <span className="font-mono text-emerald-700 font-bold">
-                    TMT: {it.suggestedTmt || it.currentTmt || '-'}
-                  </span>
+            {generatingSql ? (
+              <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-600 flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                <span>กำลังสร้างสคริปต์ SQL...</span>
+              </div>
+            ) : itemsToUpdate.length === 0 ? (
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 text-center">
+                ไม่พบรายการที่ต้องอัปเดตเพิ่มเติมในขณะนี้
+              </div>
+            ) : (
+              <>
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-2 max-h-36 overflow-y-auto">
+                  <div className="font-bold text-slate-900">รายการที่รวมในสคริปต์ ({itemsToUpdate.length} รายการ):</div>
+                  {itemsToUpdate.map((it, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-[11px] py-1 border-b border-slate-200/60 last:border-0">
+                      <span className="font-medium text-slate-800">{it.drugname}</span>
+                      <span className="font-mono text-emerald-700 font-bold">
+                        24 หลัก: {it.suggestedCode24 || it.currentCode24 || '-'} • TMT: {it.suggestedTmt || it.currentTmt || '-'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="flex justify-end gap-2.5 pt-2">
+                {generatedSqlInfo?.sql && (
+                  <pre className="p-3.5 rounded-2xl bg-slate-900 text-emerald-200 font-mono text-[11px] max-h-56 overflow-auto border border-slate-700 whitespace-pre-wrap">
+                    {generatedSqlInfo.sql}
+                  </pre>
+                )}
+              </>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => setShowApplyModal(false)}
-                disabled={applying}
                 className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs cursor-pointer"
               >
-                ยกเลิก
+                ปิด
               </button>
               <button
                 type="button"
-                onClick={handleExecuteUpdates}
-                disabled={applying}
-                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-1.5"
+                onClick={handleCopyModalSql}
+                disabled={generatingSql || !generatedSqlInfo?.sql}
+                className="px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
               >
-                {applying ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
-                <span>{applying ? 'กำลังบันทึก...' : 'ยืนยันบันทึกลงฐาน JHCIS'}</span>
+                {copiedSql ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedSql ? 'คัดลอกแล้ว!' : 'คัดลอก SQL'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadSqlFile}
+                disabled={generatingSql || !generatedSqlInfo?.sql}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                <span>ดาวน์โหลดไฟล์ .sql</span>
               </button>
             </div>
           </div>

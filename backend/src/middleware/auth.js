@@ -6,9 +6,10 @@ function requireAuth(req, res, next) {
   const token = header.startsWith('Bearer ') ? header.slice(7) : (req.headers['x-auth-token'] || req.query?.token || '');
   const session = getSession(token);
   if (!session) {
-    // ถ้าเป็นการเรียก API เบิกยาคลังใน (substock) หรือค้นหารายการยาสำหรับมือถือ อนุญาตให้ทำรายการได้ในนามเจ้าหน้าที่ห้องยา (สแกนเนอร์มือถือ)
+    // ถ้าเป็นการเรียก API เบิกยาคลังใน (substock แบบดูข้อมูล/สแกนเบิก) หรือค้นหารายการยาสำหรับมือถือ อนุญาตให้ทำรายการได้ในนามเจ้าหน้าที่ห้องยา
+    // ยกเว้นคำสั่งลบ/ยกเลิก (DELETE) ซึ่งต้อง login เพื่อป้องกันการลบโดยไม่ระบุตัวตน
     if (
-      req.path.startsWith('/substock') ||
+      (req.path.startsWith('/substock') && req.method !== 'DELETE') ||
       req.path === '/stock/drugs' ||
       req.path === '/drugs'
     ) {

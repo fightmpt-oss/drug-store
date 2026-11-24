@@ -130,15 +130,13 @@ router.post('/dtam/generate-sql', requireAdmin, async (req, res) => {
   }
 });
 
-// Apply updates directly to JHCIS
-router.post('/dtam/apply-updates', requireAdmin, async (req, res) => {
-  try {
-    const updates = req.body.updates || [];
-    const result = await dtamService.applyDirectUpdates(updates);
-    res.json({ success: true, data: result });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
+// Read-Only Policy: ห้ามเขียนตรงลงฐานข้อมูล JHCIS (ให้สร้างและดาวน์โหลดเฉพาะไฟล์ .sql)
+router.post('/dtam/apply-updates', requireAdmin, (req, res) => {
+  res.status(403).json({
+    success: false,
+    code: 'READ_ONLY_POLICY',
+    message: 'ระบบยึดนโยบายอ่านฐานข้อมูล JHCIS อย่างเดียว (Read-Only 100%) — กรุณาใช้ปุ่มสร้างสคริปต์ SQL เพื่อดาวน์โหลดไปรันในฐานข้อมูลด้วยตนเอง'
+  });
 });
 
 module.exports = router;

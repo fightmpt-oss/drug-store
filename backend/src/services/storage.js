@@ -67,6 +67,11 @@ class JsonStore {
     return this._cache;
   }
 
+  reload() {
+    this._cache = null;
+    return this.get();
+  }
+
   set(data) {
     this._cache = data;
     ensureDir(DATA_DIR);

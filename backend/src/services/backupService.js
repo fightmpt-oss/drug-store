@@ -23,10 +23,20 @@ const LOCALDB_DIR = path.resolve(__dirname, '../data/localdb');
 const DATA_DIR = path.resolve(__dirname, '../data');
 
 const CONFIG_FILES = [
-  path.join(PROJECT_ROOT, 'config.json'),
   path.join(__dirname, '../../config.json'),
+  path.join(PROJECT_ROOT, 'config.json'),
   path.join(__dirname, '../config.json')
 ];
+
+function sanitizeConfigForBackup(parsed) {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const hadPassword = Boolean(parsed.password);
+  const clean = { ...parsed, password: '' };
+  if (hadPassword) {
+    clean._passwordRedacted = true;
+  }
+  return clean;
+}
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) {
@@ -196,8 +206,9 @@ function backupConfig(reason = 'อัปเดตการตั้งค่า
   try {
     const raw = fs.readFileSync(configPath, 'utf8');
     const parsed = JSON.parse(raw);
+    const sanitized = sanitizeConfigForBackup(parsed);
     const safeData = {
-      ...parsed,
+      ...sanitized,
       _backupMeta: {
         reason,
         actor,
@@ -440,10 +451,12 @@ function createFullSnapshot(reason = 'สำรองข้อมูลทั้
       }
     };
 
-    // 1. Config
+    // 1. Config (ซ่อนรหัสผ่าน DB เสมอ)
     const configPath = CONFIG_FILES.find(p => fs.existsSync(p));
     if (configPath) {
-      try { snapshot.config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (e) {}
+      try {
+        snapshot.config = sanitizeConfigForBackup(JSON.parse(fs.readFileSync(configPath, 'utf8')));
+      } catch (e) {}
     }
 
     // 2. Mappings
@@ -564,23 +577,73 @@ function restoreFromBackup(filename, actor = 'admin') {
   if (safeFilename.startsWith('config_')) {
     const raw = fs.readFileSync(sourcePath, 'utf8');
     const parsed = JSON.parse(raw);
-    const configPath = CONFIG_FILES.find(p => fs.existsSync(p)) || CONFIG_FILES[0];
-    fs.writeFileSync(configPath, JSON.stringify(parsed, null, 2), 'utf8');
-    return { success: true, type: 'config', message: 'กู้คืนการตั้งค่าระบบเรียบร้อย (กรุณารีสตาร์ตเซิร์ฟเวอร์เพื่อให้มีผลสมบูรณ์)' };
+    const { _backupMeta, _passwordRedacted, ...rest } = parsed;
+    const configPath = CONFIG_FILES[0];
+    let existingPassword = '';
+    if (fs.existsSync(configPath)) {
+      try {
+        existingPassword = JSON.parse(fs.readFileSync(configPath, 'utf8')).password || '';
+      } catch (e) {}
+    }
+    const restoredConfig = { ...rest };
+    if ((_passwordRedacted || !restoredConfig.password) && existingPassword) {
+      restoredConfig.password = existingPassword;
+    }
+    fs.writeFileSync(configPath, JSON.stringify(restoredConfig, null, 2), 'utf8');
+    try {
+      const db = require('../config/db');
+      if (typeof db.reloadConfig === 'function') {
+        Promise.resolve(db.reloadConfig()).catch(() => {});
+      }
+    } catch (e) {}
+    return { success: true, type: 'config', message: 'กู้คืนการตั้งค่าระบบเรียบร้อยแล้ว' };
   }
 
   if (safeFilename.startsWith('mappings_')) {
     const raw = fs.readFileSync(sourcePath, 'utf8');
     const mappingsPath = path.join(DATA_DIR, 'mappings.json');
     fs.writeFileSync(mappingsPath, raw, 'utf8');
+    try {
+      const db = require('../config/db');
+      if (typeof db.reloadMappings === 'function') db.reloadMappings();
+    } catch (e) {}
     return { success: true, type: 'mappings', message: 'กู้คืนข้อมูลการจับคู่ยาเรียบร้อยแล้ว' };
   }
 
   if (safeFilename.startsWith('stock_counts_')) {
     const raw = fs.readFileSync(sourcePath, 'utf8');
+    ensureDir(LOCALDB_DIR);
     const countsPath = path.join(LOCALDB_DIR, 'stock_counts.json');
     fs.writeFileSync(countsPath, raw, 'utf8');
+    try {
+      const localStore = require('./localStore');
+      if (typeof localStore.reloadAllStores === 'function') localStore.reloadAllStores();
+    } catch (e) {}
     return { success: true, type: 'stock_counts', message: 'กู้คืนยอดยกมาและการตรวจนับสต็อกเรียบร้อยแล้ว' };
+  }
+
+  if (safeFilename.startsWith('drug_settings_')) {
+    const raw = fs.readFileSync(sourcePath, 'utf8');
+    ensureDir(LOCALDB_DIR);
+    const settingsPath = path.join(LOCALDB_DIR, 'drug_settings.json');
+    fs.writeFileSync(settingsPath, raw, 'utf8');
+    try {
+      const localStore = require('./localStore');
+      if (typeof localStore.reloadAllStores === 'function') localStore.reloadAllStores();
+    } catch (e) {}
+    return { success: true, type: 'drug_settings', message: 'กู้คืนการตั้งค่าเฉพาะรายการยาเรียบร้อยแล้ว' };
+  }
+
+  if (safeFilename.startsWith('receipts_')) {
+    const raw = fs.readFileSync(sourcePath, 'utf8');
+    ensureDir(LOCALDB_DIR);
+    const receiptsPath = path.join(LOCALDB_DIR, 'receipts.json');
+    fs.writeFileSync(receiptsPath, raw, 'utf8');
+    try {
+      const localStore = require('./localStore');
+      if (typeof localStore.reloadAllStores === 'function') localStore.reloadAllStores();
+    } catch (e) {}
+    return { success: true, type: 'receipts', message: 'กู้คืนประวัติใบรับยาเรียบร้อยแล้ว' };
   }
 
   throw new Error(`ไม่รองรับการกู้คืนอัตโนมัติสำหรับไฟล์ประเภทนี้ (${safeFilename})`);
