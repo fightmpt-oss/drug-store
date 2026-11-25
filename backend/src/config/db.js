@@ -21,12 +21,13 @@ const defaultConfig = {
   mode: 'live',
   // ปิด auto-fallback: ต่อ jhcisdb ไม่ได้ = ระบบต้องบล็อกการใช้งาน ไม่ใช่สลับไปโชว์ข้อมูลจำลองเงียบ ๆ
   autoFallbackToDemo: false,
+  appPort: 5050,
   admins: ['admin', 'adm'],
   pcucode: '',          // รหัสหน่วยบริการ — เว้นว่างให้ detect จาก JHCIS, หรือกรอกเองตอน deploy หน่วยอื่น
   pcuname: '',          // ชื่อสถานบริการ (แสดงบนรายงาน)
   pcuAddress: '',       // ที่อยู่ (ตำบล/อำเภอ/จังหวัด)
   motherHospital: '',   // ชื่อ รพ.แม่ข่าย (default ผู้ส่งมอบยา)
-  allowedOrigins: ['http://localhost:5000', 'http://localhost:3000', 'http://127.0.0.1:5000', 'http://127.0.0.1:3000']
+  allowedOrigins: ['http://localhost:5050', 'http://localhost:3000', 'http://127.0.0.1:5050', 'http://127.0.0.1:3000']
 };
 
 let currentConfig = { ...defaultConfig };

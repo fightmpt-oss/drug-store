@@ -1167,7 +1167,7 @@ export default function SubstockQrView({ initialDrugCode, onOpenStockCard, user 
                   onChange={(e) => setQrFormat(e.target.value)}
                   className="border-2 border-emerald-500 rounded-lg px-2.5 py-1.5 bg-emerald-50/40 text-emerald-950 font-bold text-xs focus:outline-none"
                 >
-                  <option value="lan_url">📶 1. ลิงก์ Wi-Fi วงแลน ({mobileBridge?.primaryLanUrl || 'http://192.168.x.x:5000'}/m/... สแกนบนมือถือเบิกได้ทันที)</option>
+                  <option value="lan_url">📶 1. ลิงก์ Wi-Fi วงแลน ({mobileBridge?.primaryLanUrl || 'http://192.168.x.x:5050'}/m/... สแกนบนมือถือเบิกได้ทันที)</option>
                   <option value="standard">🏷️ 2. รหัสมาตรฐาน JHCIS-DRUG (JHCIS-DRUG:รหัสยา สำหรับเครื่องยิงบาร์โค้ด USB 2D)</option>
                 </select>
               </div>

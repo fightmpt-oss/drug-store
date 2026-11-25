@@ -4,7 +4,7 @@ const QRCode = require('qrcode');
 /**
  * ค้นหา IPv4 ในวงแลน (Wi-Fi / Ethernet) ของเครื่องคอมพิวเตอร์แม่ข่ายห้องยา รพ.สต.
  */
-function getLanAddresses(port = 5000) {
+function getLanAddresses(port = 5050) {
   const interfaces = os.networkInterfaces();
   const list = [];
 
@@ -53,7 +53,7 @@ function getLanAddresses(port = 5000) {
 /**
  * ดึงข้อมูลการเชื่อมต่อมือถือผ่าน Wi-Fi วงแลนเดียวกัน (ถาวร 100% ไม่เปลี่ยนตาม Cloudflare)
  */
-async function getMobileBridgeInfo({ port = 5000, mobileToken = null, drugcode = null } = {}) {
+async function getMobileBridgeInfo({ port = 5050, mobileToken = null, drugcode = null } = {}) {
   const lanList = getLanAddresses(port);
   const primaryLanUrl = lanList[0]?.url || `http://localhost:${port}`;
 

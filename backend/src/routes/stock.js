@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { getConfig } = require('../config/db');
 const {
   getStockCareSummary,
   getStockCardDetail,
@@ -443,7 +444,7 @@ router.delete('/substock/transfer/:id', async (req, res) => {
 // 5. สร้างป้าย QR Code ประจำตัวยาใน JHCIS สำหรับพิมพ์ติดหน้าชั้นวางยาคลังใน
 router.get('/substock/qrcodes', async (req, res) => {
   try {
-    const port = Number(process.env.PORT) || 5000;
+    const port = Number(process.env.PORT) || Number(getConfig().appPort) || 5050;
     const bridge = await getMobileBridgeInfo({ port });
     const { search = '', limit = 100, qrFormat = 'lan_url' } = req.query;
     const QRCode = require('qrcode');
@@ -467,7 +468,7 @@ router.get('/substock/qrcodes', async (req, res) => {
     const results = await Promise.all(capped.map(async d => {
       let qrPayload = `JHCIS-DRUG:${d.drugcode}`;
       if (qrFormat === 'lan_url') {
-        const base = bridge.primaryLanUrl || 'http://localhost:5000';
+        const base = bridge.primaryLanUrl || `http://localhost:${port}`;
         qrPayload = `${base}/m/${encodeURIComponent(d.drugcode)}`;
       }
 
@@ -500,7 +501,7 @@ router.get('/substock/qrcodes', async (req, res) => {
 // 6. ดึงข้อมูลเชื่อมต่อมือถือผ่าน Wi-Fi วงแลน รพ.สต. (ถาวร 100%)
 router.get('/substock/mobile-bridge', async (req, res) => {
   try {
-    const port = Number(process.env.PORT) || 5000;
+    const port = Number(process.env.PORT) || Number(getConfig().appPort) || 5050;
     const info = await getMobileBridgeInfo({
       port,
       mobileToken: req.user?.token || null,

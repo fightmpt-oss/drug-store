@@ -19,7 +19,7 @@ function guard(req, res) {
     res.status(403).json({
       success: false,
       code: 'LOCAL_ONLY',
-      message: 'การตั้งค่าเชื่อมต่อฐานข้อมูลทำได้เฉพาะจากเครื่องเซิร์ฟเวอร์ที่ติดตั้งระบบเท่านั้น (เปิด http://localhost:5000 บนเครื่องเซิร์ฟเวอร์)'
+      message: `การตั้งค่าเชื่อมต่อฐานข้อมูลทำได้เฉพาะจากเครื่องเซิร์ฟเวอร์ที่ติดตั้งระบบเท่านั้น (เปิด http://localhost:${Number(process.env.PORT) || Number(getConfig().appPort) || 5050} บนเครื่องเซิร์ฟเวอร์)`
     });
     return false;
   }

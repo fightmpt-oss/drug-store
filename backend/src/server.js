@@ -15,7 +15,7 @@ const setupRouter = require('./routes/setup');
 const safetyRouter = require('./routes/safety');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || Number(getConfig().appPort) || 5050;
 
 app.disable('x-powered-by');
 app.use(securityHeaders);
@@ -44,6 +44,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     system: 'JHCIS Drug Stock & Stock Card Engine',
+    port: PORT,
     mode: getMode(), // 'live' | 'live_unavailable' | 'demo'
     configuredMode: cfg.mode,
     isConnected: cfg.isConnected,

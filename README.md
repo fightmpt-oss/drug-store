@@ -65,7 +65,7 @@
 ```
 เปิดระบบคลังยา_JHCIS.bat
 ```
-ระบบจะเปิดโปรแกรมและเปิดหน้าจอเว็บที่ `http://localhost:5000` ให้อัตโนมัติทันที
+ระบบจะเปิดโปรแกรมและเปิดหน้าจอเว็บที่ `http://localhost:5050` ให้อัตโนมัติทันที
 
 ---
 
@@ -75,7 +75,7 @@
    npm run dev
    ```
 2. **เปิดเบราว์เซอร์เข้าใช้งาน:**
-   * หน้าหลักระบบ: `http://localhost:5000` (หรือ `http://localhost:3000` สำหรับ Dev Mode)
+   * หน้าหลักระบบ: `http://localhost:5050` (หรือ `http://localhost:3000` สำหรับ Dev Mode)
 
 ---
 
@@ -103,7 +103,7 @@ d:\PROJECTS\Drug Store\
 │   │   │   └── jhcisSyncService.js # บันทึกเข้า cdrugstockreceipt & cdrugstockreceiptitem
 │   │   ├── routes/               # API Routes (auth, stock, excel, mappings, settings)
 │   │   ├── data/mockData.js      # ชุดข้อมูลจำลอง รพ.สต. เสมือนจริง
-│   │   └── server.js             # Express Server (Port 5000)
+│   │   └── server.js             # Express Server (Port 5050)
 ├── frontend/
 │   ├── src/
 │   │   ├── components/

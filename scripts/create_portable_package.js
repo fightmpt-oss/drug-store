@@ -93,15 +93,16 @@ const configTemplate = {
   charset: "tis620",
   mode: "live",
   autoFallbackToDemo: false,
+  appPort: 5050,
   admins: ["admin", "adm"],
   pcucode: "",
   pcuname: "",
   pcuAddress: "",
   motherHospital: "",
   allowedOrigins: [
-    "http://localhost:5000",
+    "http://localhost:5050",
     "http://localhost:3000",
-    "http://127.0.0.1:5000",
+    "http://127.0.0.1:5050",
     "http://127.0.0.1:3000"
   ],
   receiptSource: "local"

@@ -104,15 +104,16 @@ const cleanConfig = {
   charset: "tis620",
   mode: "live",
   autoFallbackToDemo: false,
+  appPort: 5050,
   admins: ["admin", "adm"],
   pcucode: "",
   pcuname: "",
   pcuAddress: "",
   motherHospital: "",
   allowedOrigins: [
-    "http://localhost:5000",
+    "http://localhost:5050",
     "http://localhost:3000",
-    "http://127.0.0.1:5000",
+    "http://127.0.0.1:5050",
     "http://127.0.0.1:3000"
   ],
   receiptSource: "local"
@@ -307,7 +308,7 @@ const sfxCommentLines = [
   '• เปิดใช้งานผ่านไอคอนได้ทันทีแบบไร้หน้าต่างจอดำ (No CMD Window)',
   '• อ่านฐานข้อมูล JHCIS แบบ Read-Only 100% พร้อมระบบสำรองข้อมูลและนำเข้า Excel/PDF อัตโนมัติ',
   '}',
-  'Presetup=powershell.exe -NoProfile -WindowStyle Hidden -Command "Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"',
+  'Presetup=powershell.exe -NoProfile -WindowStyle Hidden -Command "Get-NetTCPConnection -LocalPort 5050 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"',
   'Setup=wscript.exe //nologo install_finish.vbs',
   'Overwrite=1'
 ];
