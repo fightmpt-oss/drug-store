@@ -44,8 +44,9 @@ import {
   QrCode
 } from 'lucide-react';
 import { api } from '../services/api';
-import { currentFiscalYear, prevFiscalYear } from '../utils/fiscalYear';
+import { currentFiscalYear, prevFiscalYear, nextFiscalYear, fiscalYearByBE } from '../utils/fiscalYear';
 import PaginationBar from './PaginationBar';
+import FiscalYearRolloverModal from './FiscalYearRolloverModal';
 
 
 // นิยามกลุ่มเวชภัณฑ์ JHCIS ทั้งหมดสำหรับ Dropdown ตัวเลือกหลายกลุ่ม (Multi-Select)
@@ -104,6 +105,21 @@ export default function DashboardView({
     const fy = currentFiscalYear();
     return { startDate: fy.startDate, endDate: fy.endDate };
   });
+  const [fiscalInfo, setFiscalInfo] = useState(null);
+  const [showRolloverModal, setShowRolloverModal] = useState(false);
+
+  const loadFiscalYears = async () => {
+    try {
+      const res = await api.getFiscalYears();
+      if (res.success && res.data) {
+        setFiscalInfo(res.data);
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    loadFiscalYears();
+  }, []);
 
   // Table Density / Font Size Mode: 'compact' (A- กะทัดรัด), 'normal' (A ปกติ), 'large' (A+ สบายตา)
   const [tableDensity, setTableDensity] = useState(() => {
@@ -441,6 +457,15 @@ export default function DashboardView({
     } else if (preset === 'fy_prev') {
       const pfy = prevFiscalYear();
       setDateRange({ startDate: pfy.startDate, endDate: pfy.endDate });
+    } else if (preset === 'fy_next') {
+      const nfy = nextFiscalYear();
+      setDateRange({ startDate: nfy.startDate, endDate: nfy.endDate });
+    } else if (preset.startsWith('fy_')) {
+      const fyNum = Number(preset.replace('fy_', ''));
+      if (!isNaN(fyNum)) {
+        const fyObj = fiscalYearByBE(fyNum);
+        setDateRange({ startDate: fyObj.startDate, endDate: fyObj.endDate });
+      }
     } else if (preset === 'this_month') {
       setDateRange({
         startDate: `${yyyy}-${mm}-01`,
@@ -466,10 +491,15 @@ export default function DashboardView({
 
   // ตรวจจับชื่อ Preset ปัจจุบัน สำหรับแสดงผลใน Dropdown
   const currentPreset = (() => {
+    const fyList = fiscalInfo?.years || [];
+    const matchedFy = fyList.find(y => y.startDate === dateRange.startDate && y.endDate === dateRange.endDate);
+    if (matchedFy) return `fy_${matchedFy.fy}`;
     const fy = currentFiscalYear();
     const pfy = prevFiscalYear();
+    const nfy = nextFiscalYear();
     if (dateRange.startDate === fy.startDate && dateRange.endDate === fy.endDate) return 'fy_current';
     if (dateRange.startDate === pfy.startDate && dateRange.endDate === pfy.endDate) return 'fy_prev';
+    if (dateRange.startDate === nfy.startDate && dateRange.endDate === nfy.endDate) return 'fy_next';
     const today = new Date();
     const yyyy = today.getFullYear();
     const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -658,13 +688,34 @@ export default function DashboardView({
                 className="text-xs font-bold text-slate-800 bg-white border border-slate-200 rounded-lg px-2 py-1 focus:outline-emerald-500 cursor-pointer shadow-2xs"
                 title="เลือกรอบปีงบประมาณหรือช่วงเวลาสำหรับคำนวณยอดยกมา รับเข้า จ่ายออก และคงเหลือ"
               >
-                <option value="fy_current">{currentFiscalYear().label}</option>
-                <option value="fy_prev">{prevFiscalYear().label}</option>
+                {(fiscalInfo?.years && fiscalInfo.years.length > 0) ? (
+                  fiscalInfo.years.map(y => (
+                    <option key={y.fy} value={`fy_${y.fy}`}>
+                      {y.shortLabel}{y.isActive ? ' (ใช้งานอยู่)' : y.status === 'closed' ? ' (ปิดงวดแล้ว)' : ''}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="fy_current">{currentFiscalYear().label}</option>
+                    <option value="fy_prev">{prevFiscalYear().label}</option>
+                    <option value="fy_next">{nextFiscalYear().label}</option>
+                  </>
+                )}
                 <option value="this_month">เดือนปัจจุบัน</option>
                 <option value="last_3_months">ไตรมาสล่าสุด (3 ด.)</option>
                 <option value="ytd">ทั้งปีปฏิทิน</option>
                 <option value="custom">กำหนดช่วงวันที่เอง...</option>
               </select>
+
+              <button
+                type="button"
+                onClick={() => setShowRolloverModal(true)}
+                className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-extrabold transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
+                title="ปิดยอดสิ้นปี (30 ก.ย.) และยกยอดคงเหลือเริ่มต้นปีงบประมาณใหม่ (1 ต.ค.)"
+              >
+                <RefreshCw className="w-3 h-3 text-amber-700 shrink-0" />
+                <span>เริ่มต้นปีงบประมาณใหม่</span>
+              </button>
 
               <div className="hidden sm:flex items-center space-x-1 pl-1 border-l border-slate-200">
                 <input
@@ -1947,6 +1998,27 @@ export default function DashboardView({
           </div>
         </div>
       )}
+
+      <FiscalYearRolloverModal
+        isOpen={showRolloverModal}
+        onClose={() => setShowRolloverModal(false)}
+        user={user}
+        fiscalInfo={fiscalInfo}
+        onSelectFiscalYear={(fyObj) => {
+          setDateRange({ startDate: fyObj.startDate, endDate: fyObj.endDate });
+          setPage(1);
+        }}
+        onCompleted={(res) => {
+          setShowRolloverModal(false);
+          loadFiscalYears();
+          if (res?.bounds) {
+            setDateRange({ startDate: res.bounds.startDate, endDate: res.bounds.endDate });
+          }
+          setPage(1);
+          setQuickToast(res?.message || 'เปิดปีงบประมาณใหม่เรียบร้อยแล้ว');
+          setTimeout(() => setQuickToast(''), 5000);
+        }}
+      />
 
     </div>
   );

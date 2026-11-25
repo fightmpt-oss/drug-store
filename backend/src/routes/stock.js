@@ -3,6 +3,11 @@ const router = express.Router();
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { getConfig } = require('../config/db');
 const {
+  listFiscalYears,
+  previewFiscalYearRollover,
+  executeFiscalYearRollover
+} = require('../services/fiscalYearService');
+const {
   getStockCareSummary,
   getStockCardDetail,
   getDrugSubstockInfo,
@@ -510,6 +515,47 @@ router.get('/substock/mobile-bridge', async (req, res) => {
     res.json({ success: true, data: info });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ==========================================
+// รอบปีงบประมาณ & การเริ่มต้นปีงบประมาณใหม่ (ยกยอดคงเหลือ 30 ก.ย. -> 1 ต.ค.)
+// ==========================================
+
+router.get('/fiscal-years', (req, res) => {
+  try {
+    const data = listFiscalYears();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message });
+  }
+});
+
+router.get('/fiscal-years/rollover-preview', async (req, res) => {
+  try {
+    const { targetFy, excludeExpired } = req.query;
+    const preview = await previewFiscalYearRollover({
+      targetFy: targetFy ? Number(targetFy) : undefined,
+      excludeExpired: excludeExpired === '1' || excludeExpired === 'true'
+    });
+    res.json({ success: true, data: preview });
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message });
+  }
+});
+
+router.post('/fiscal-years/rollover', requireAdmin, async (req, res) => {
+  try {
+    const { targetFy, excludeExpired, note } = req.body || {};
+    const actor = req.user?.displayName || req.user?.username || 'admin';
+    const result = await executeFiscalYearRollover({
+      targetFy: targetFy ? Number(targetFy) : undefined,
+      excludeExpired: Boolean(excludeExpired),
+      note: note || ''
+    }, actor);
+    res.json(result);
+  } catch (err) {
+    res.status(err.status || 500).json({ success: false, message: err.message });
   }
 });
 

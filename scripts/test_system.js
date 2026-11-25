@@ -477,6 +477,56 @@ async function run() {
     Boolean(item0002Post) && item0002Post.mainStoreBalance === 500 && item0002Post.dispensedBeforeTransfer === 200 && item0002Post.dispensedFromCounter === 900 && item0002Post.counterBalance === -400,
     `main=${item0002Post?.mainStoreBalance}, counter=${item0002Post?.counterBalance}, before=${item0002Post?.dispensedBeforeTransfer}, fromCounter=${item0002Post?.dispensedFromCounter}`);
 
+  // ---------- 12.9 Fiscal Year Management & Carry-Forward Rollover (30 ก.ย. -> 1 ต.ค.) ----------
+  // ตั้งยอดนับ 0002 ต้นปีงบ 2570 (2026-10-01) = 1000, บวกใบรับ +200 (today=2026-11-25), เบิกคลังใน 2026-10-15 = -300 -> คงเหลือ 30 ก.ย. 2570 = 900
+  await api('POST', '/api/stock/initial-count', {
+    drugcode: '0002', drugname: 'Amoxicillin 500 mg capsule',
+    lots: [{ lotno: 'LC-FEFO', dateexpire: '2027-06-30', amount: 1000, costprice: 1.2 }],
+    countDate: '2026-10-01', countedBy: 'tester'
+  }, STAFF_TOKEN);
+  await api('POST', '/api/stock/substock/transfer', {
+    drugcode: '0002', drugname: 'Amoxicillin 500 mg capsule',
+    lotno: 'LC-FEFO', dateexpire: '2027-06-30', amount: 300, date: '2026-10-15', note: 'ทดสอบเบิกปีงบ 2570'
+  }, STAFF_TOKEN);
+
+  const fyListRes = await api('GET', '/api/stock/fiscal-years', null, TOKEN);
+  log('FISCAL YEAR: ดึงรายการปีงบประมาณได้ (200)',
+    fyListRes.status === 200 && Array.isArray(fyListRes.data?.data?.years) && fyListRes.data.data.years.length >= 3,
+    `activeFy=${fyListRes.data?.data?.activeFy}, count=${fyListRes.data?.data?.years?.length}`);
+
+  const fyPrevRes = await api('GET', '/api/stock/fiscal-years/rollover-preview?targetFy=2571', null, TOKEN);
+  const prev0002 = (fyPrevRes.data?.data?.items || []).find(i => i.drugcode === '0002');
+  log('FISCAL YEAR: พรีวิวยอดยกข้ามปี 2571 (คงเหลือ 0002 ณ 30 ก.ย. 2570 = 900)',
+    fyPrevRes.status === 200 && Boolean(prev0002) && prev0002.totalAmount === 900 && fyPrevRes.data?.data?.newStartDate === '2027-10-01',
+    `items=${fyPrevRes.data?.data?.summary?.drugCount}, 0002=${prev0002?.totalAmount}`);
+
+  const staffRollover = await api('POST', '/api/stock/fiscal-years/rollover', { targetFy: 2571 }, STAFF_TOKEN);
+  log('FISCAL YEAR: staff เรียก rollover → 403 (admin only)', staffRollover.status === 403, `status=${staffRollover.status}`);
+
+  const adminRollover = await api('POST', '/api/stock/fiscal-years/rollover', { targetFy: 2571, excludeExpired: false, note: 'ทดสอบขึ้นปีงบ 2571' }, TOKEN);
+  log('FISCAL YEAR: admin ยืนยันเริ่มต้นปีงบประมาณ 2571 สำเร็จ + สำรอง snapshot อัตโนมัติ',
+    adminRollover.status === 200 && adminRollover.data?.success === true && Boolean(adminRollover.data?.snapshotFile) && adminRollover.data?.targetFy === 2571,
+    `snapshot=${adminRollover.data?.snapshotFile}, drugs=${adminRollover.data?.summary?.drugCount}`);
+
+  // ตรวจสอบว่าปีงบ 2571 เริ่มจาก 2027-10-01 ด้วยยอด 900 และปีย้อนหลัง 2570 (2026-10-01..2027-09-30) ยังดูยอดเดิม 900 ได้
+  const fy2571Overview = await api('GET', '/api/stock/overview?search=0002&startDate=2027-10-01&endDate=2028-09-30&drugTypeFilter=all&drugFlagFilter=all', null, TOKEN);
+  const item0002NewFy = (fy2571Overview.data?.data?.items || []).find(i => i.drugcode === '0002');
+  const fy2570ArchivedOv = await api('GET', '/api/stock/overview?search=0002&startDate=2026-10-01&endDate=2027-09-30&drugTypeFilter=all&drugFlagFilter=all', null, TOKEN);
+  const item0002OldFy = (fy2570ArchivedOv.data?.data?.items || []).find(i => i.drugcode === '0002');
+  log('FISCAL YEAR: ปีงบใหม่ 2571 รับยอดยกมา 900 และปีงบเดิม 2570 ยังคำนวณย้อนหลังถูกต้อง',
+    Boolean(item0002NewFy) && item0002NewFy.broughtForward === 900 && item0002NewFy.mainStoreBalance === 900 &&
+    Boolean(item0002OldFy) && item0002OldFy.mainStoreBalance === 900,
+    `fy2571BF=${item0002NewFy?.broughtForward}, fy2570Main=${item0002OldFy?.mainStoreBalance}`);
+
+  // รีเซ็ตยอดนับ 0001 กลับมาเป็น 400 เพื่อให้เทส PERSISTENCE (ข้อ 13) เดิมทำงานครบสมบูรณ์
+  await api('POST', '/api/stock/initial-count', {
+    drugcode: '0001',
+    drugname: 'Paracetamol 500 mg tablet',
+    lots: [{ lotno: 'L9001', dateexpire: '2027-06-30', amount: 400, costprice: 0.35 }],
+    countDate: today,
+    countedBy: 'tester'
+  }, STAFF_TOKEN);
+
   // ---------- 13. PERSISTENCE: รีสตาร์ทแล้วข้อมูลต้องอยู่ ----------
   await stopServer();
   await startServer();

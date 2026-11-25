@@ -23,9 +23,19 @@ import {
   Wifi,
   Copy,
   ExternalLink,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Calendar
 } from 'lucide-react';
 import { api } from '../services/api';
+
+function formatThaiDateBe(isoStr) {
+  if (!isoStr) return '';
+  const parts = String(isoStr).slice(0, 10).split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return isoStr;
+  const [y, m, d] = parts;
+  const months = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  return `${d} ${months[m] || m} ${y + 543}`;
+}
 
 export default function SubstockQrView({ initialDrugCode, onOpenStockCard, user }) {
   const [activeSubTab, setActiveSubTab] = useState('scan'); // 'scan' | 'labels' | 'history'
@@ -39,11 +49,34 @@ export default function SubstockQrView({ initialDrugCode, onOpenStockCard, user 
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // Withdrawal form state
+  // Withdrawal form state (จำวันที่เบิกไว้ใน sessionStorage เพื่อรองรับการสแกน QR คีย์ย้อนหลังหลายตัวต่อเนื่อง)
   const [selectedLot, setSelectedLot] = useState('');
   const [selectedExp, setSelectedExp] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('');
-  const [withdrawDate, setWithdrawDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [withdrawDate, setWithdrawDate] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('jhcis_substock_withdraw_date');
+      if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) return saved;
+    } catch (e) {}
+    return new Date().toISOString().slice(0, 10);
+  });
+  const updateWithdrawDate = (newDate) => {
+    setWithdrawDate(newDate);
+    try {
+      if (newDate) sessionStorage.setItem('jhcis_substock_withdraw_date', newDate);
+    } catch (e) {}
+  };
+  const shiftWithdrawDate = (deltaDays) => {
+    const base = withdrawDate ? new Date(`${withdrawDate}T00:00:00`) : new Date();
+    if (isNaN(base.getTime())) return;
+    base.setDate(base.getDate() + deltaDays);
+    const yyyy = base.getFullYear();
+    const mm = String(base.getMonth() + 1).padStart(2, '0');
+    const dd = String(base.getDate()).padStart(2, '0');
+    updateWithdrawDate(`${yyyy}-${mm}-${dd}`);
+  };
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isBackdatedMode = Boolean(withdrawDate && withdrawDate < todayIso);
   const [withdrawNote, setWithdrawNote] = useState('เบิกยาจากคลังในไปวางจุดจ่ายยาหน้าเคาน์เตอร์');
   const [submitting, setSubmitting] = useState(false);
 
@@ -364,7 +397,7 @@ export default function SubstockQrView({ initialDrugCode, onOpenStockCard, user 
       });
 
       if (res.success) {
-        setSuccessMsg(res.message);
+        setSuccessMsg(`${res.message} (วันที่เบิก: ${formatThaiDateBe(withdrawDate)})`);
         setDrugInfo(res.data);
         setWithdrawAmount('');
         // อัปเดต Lot อัตโนมัติหาก Lot เดิมหมด
@@ -536,7 +569,73 @@ export default function SubstockQrView({ initialDrugCode, onOpenStockCard, user 
       {/* TAB 1: สแกน QR Code และตัดเบิกยาจากคลังยาในไปเคาน์เตอร์                 */}
       {/* ===================================================================== */}
       {activeSubTab === 'scan' && (
-        <div className="space-y-5">
+        <div className="space-y-4">
+
+          {/* Sticky / Prominent Withdrawal Date Bar for Backdated Entry */}
+          <div className={`rounded-2xl border p-3.5 sm:px-5 shadow-2xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 transition-colors ${
+            isBackdatedMode
+              ? 'bg-amber-50/90 border-amber-300'
+              : 'bg-white border-slate-200'
+          }`}>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <div className={`p-2 rounded-xl border ${
+                isBackdatedMode ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              }`}>
+                <Calendar className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs sm:text-sm font-extrabold text-slate-900">
+                    วันที่เบิกยาออกจากคลังใน:
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                    isBackdatedMode
+                      ? 'bg-amber-200 text-amber-950'
+                      : 'bg-emerald-100 text-emerald-900'
+                  }`}>
+                    {formatThaiDateBe(withdrawDate)}{isBackdatedMode ? ' • โหมดคีย์ย้อนหลัง' : ' • วันนี้'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  {isBackdatedMode
+                    ? 'ระบบจะล็อกวันที่ย้อนหลังนี้ไว้ให้ทุกครั้งที่สแกน QR ต่อเนื่อง ไม่ต้องเลือกวันที่ใหม่ทุกตัว'
+                    : 'หากต้องการไล่คีย์ใบเบิกย้อนหลังตั้งแต่ 1 ต.ค. 2569 ให้เลือกวันที่ด้านขวาแล้วสแกน QR ต่อเนื่องได้เลย'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => shiftWithdrawDate(-1)}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700 cursor-pointer"
+                title="ถอยหลัง 1 วัน"
+              >
+                &larr; -1 วัน
+              </button>
+              <input
+                type="date"
+                value={withdrawDate}
+                onChange={(e) => updateWithdrawDate(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border-2 border-emerald-500 bg-white text-xs sm:text-sm font-mono font-bold text-slate-900 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => shiftWithdrawDate(1)}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700 cursor-pointer"
+                title="เดินหน้า 1 วัน"
+              >
+                +1 วัน &rarr;
+              </button>
+              <button
+                type="button"
+                onClick={() => updateWithdrawDate(todayIso)}
+                className="px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-xs font-bold text-emerald-800 cursor-pointer"
+              >
+                วันนี้
+              </button>
+            </div>
+          </div>
 
           {/* Scan & Search Bar */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
@@ -1030,7 +1129,7 @@ export default function SubstockQrView({ initialDrugCode, onOpenStockCard, user 
                       <input
                         type="date"
                         value={withdrawDate}
-                        onChange={(e) => setWithdrawDate(e.target.value)}
+                        onChange={(e) => updateWithdrawDate(e.target.value)}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono bg-slate-50"
                       />
                     </div>

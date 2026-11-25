@@ -12,6 +12,7 @@ const countsStore = new JsonStore('stock_counts', {});      // ผลตรว�
 const countsAuditStore = new JsonStore('stock_counts_audit', []);
 const drugSettingsStore = new JsonStore('drug_settings', {}); // เกณฑ์ต่ำสุด/สูงสุด, conversion factor ต่อยา
 const substockTransfersStore = new JsonStore('substock_transfers', []); // การเบิกยาจากคลังยาในไปจุดจ่ายยาเคาน์เตอร์ (QR Scan)
+const fiscalYearsStore = new JsonStore('fiscal_years', { activeFy: null, years: {} }); // ข้อมูลปีงบประมาณและยอดยกมาที่ปิดงวดแล้ว
 
 // ---------- Migration: initial_stock.json เดิม → stock_counts.json ----------
 function migrateLegacyInitialStock() {
@@ -90,7 +91,7 @@ function itemDispenseUnits(item) {
   return amt;
 }
 
-function saveReceipt({ receiveno, receivedate, supplier, receiver, items, note, sourceFile, sourceType }) {
+async function saveReceipt({ receiveno, receivedate, supplier, receiver, items, note, sourceFile, sourceType }) {
   const cleanNo = String(receiveno || '').trim();
   const duplicates = findReceipts({ receiveno: cleanNo });
   if (cleanNo && duplicates.length > 0) {
@@ -120,7 +121,7 @@ function saveReceipt({ receiveno, receivedate, supplier, receiver, items, note, 
     throw err;
   }
 
-  const savedReceipt = receiptsStore.update(all => {
+  const savedReceipt = await receiptsStore.update(all => {
     all.unshift(receipt);
     appendAudit('receipts_audit', { ts: new Date().toISOString(), action: 'CREATE_RECEIPT', receiveno: receipt.receiveno, items: receipt.items.length, receivedate: receipt.receivedate, supplier: receipt.supplier });
     return receipt;
@@ -229,13 +230,13 @@ function normalizeLots(lots, fallbackAmount, fallbackLotno, fallbackExp, fallbac
   return validLots;
 }
 
-function saveStockCount({ drugcode, drugname, amount, lotno, dateexpire, costprice, countDate, countedBy, remark, lots }, actor) {
+async function saveStockCount({ drugcode, drugname, amount, lotno, dateexpire, costprice, countDate, countedBy, remark, lots }, actor) {
   if (!drugcode) { const err = new Error('กรุณาระบุรหัสยา'); err.status = 400; throw err; }
   const code = String(drugcode).trim();
   const validLots = normalizeLots(lots, amount, lotno, dateexpire, costprice);
   const totalAmount = validLots.reduce((s, l) => s + (Number(l.amount) || 0), 0);
 
-  return countsStore.update(all => {
+  const updatedCount = await countsStore.update(all => {
     const previous = all[code] || null;
     all[code] = {
       drugcode: code,
@@ -384,7 +385,7 @@ async function setDrugSettings(drugcode, patch, actor) {
 }
 
 // ---------- การเบิกยาจากคลังยาในไปจุดจ่ายยาเคาน์เตอร์ (Sub-stock Transfers via QR Scan) ----------
-function saveSubstockTransfer({ drugcode, drugname, hosdrugcode, hospitalDrugName, lotno, dateexpire, amount, conversionFactor, counterYield, mainStoreUnit, counterUnit, date, note }, actor) {
+async function saveSubstockTransfer({ drugcode, drugname, hosdrugcode, hospitalDrugName, lotno, dateexpire, amount, conversionFactor, counterYield, mainStoreUnit, counterUnit, date, note }, actor) {
   if (!drugcode) { const err = new Error('กรุณาระบุรหัสยา'); err.status = 400; throw err; }
   const qty = Math.abs(Number(amount) || 0);
   if (qty <= 0) { const err = new Error('จำนวนที่เบิกต้องมากกว่า 0'); err.status = 400; throw err; }
@@ -416,7 +417,7 @@ function saveSubstockTransfer({ drugcode, drugname, hosdrugcode, hospitalDrugNam
     createdAt: new Date().toISOString()
   };
 
-  return substockTransfersStore.update(all => {
+  const savedEntry = await substockTransfersStore.update(all => {
     all.unshift(entry);
     appendAudit('substock_audit', {
       ts: entry.createdAt,
@@ -429,24 +430,39 @@ function saveSubstockTransfer({ drugcode, drugname, hosdrugcode, hospitalDrugNam
     });
     return entry;
   });
+
+  try {
+    const backupService = require('./backupService');
+    backupService.backupSubstockTransfers(`เบิกยาคลังใน: ${entry.drugcode} (${entry.amount})`, entry.dispensedBy);
+  } catch (e) {}
+
+  return savedEntry;
 }
 
 function listSubstockTransfers({ drugcode, startDate, endDate, limit } = {}) {
   const all = substockTransfersStore.get();
-  const filtered = all.filter(t => {
-    if (drugcode && t.drugcode !== String(drugcode).trim()) return false;
-    if (startDate && t.date < startDate) return false;
-    if (endDate && t.date > endDate) return false;
-    return true;
-  });
+  const filtered = all
+    .filter(t => {
+      if (drugcode && t.drugcode !== String(drugcode).trim()) return false;
+      if (startDate && t.date < startDate) return false;
+      if (endDate && t.date > endDate) return false;
+      return true;
+    })
+    .slice()
+    .sort((a, b) => {
+      const da = String(a.date || '');
+      const db = String(b.date || '');
+      if (da !== db) return db.localeCompare(da);
+      return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+    });
   if (limit && Number(limit) > 0) {
     return filtered.slice(0, Number(limit));
   }
   return filtered;
 }
 
-function deleteSubstockTransfer(id, actor) {
-  return substockTransfersStore.update(all => {
+async function deleteSubstockTransfer(id, actor) {
+  const ok = await substockTransfersStore.update(all => {
     const idx = all.findIndex(t => t.id === id || t.transferNo === id);
     if (idx < 0) return false;
     const removed = all[idx];
@@ -461,6 +477,107 @@ function deleteSubstockTransfer(id, actor) {
     });
     return true;
   });
+
+  if (ok) {
+    try {
+      const backupService = require('./backupService');
+      backupService.backupSubstockTransfers(`ยกเลิกรายการเบิกคลังใน: ${id}`, actor || 'system');
+    } catch (e) {}
+  }
+
+  return ok;
+}
+
+// ---------- ปีงบประมาณและการยกยอด (Fiscal Years & Carry-Forward) ----------
+function getFiscalYearsData() {
+  const data = fiscalYearsStore.get();
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return { activeFy: null, years: {} };
+  }
+  return {
+    activeFy: data.activeFy || null,
+    years: (data.years && typeof data.years === 'object') ? data.years : {}
+  };
+}
+
+async function saveFiscalYearRecord(fy, record, { setActive = false, actor = 'system' } = {}) {
+  const key = String(fy);
+  const saved = await fiscalYearsStore.update(data => {
+    const storeObj = (!data || typeof data !== 'object' || Array.isArray(data))
+      ? { activeFy: null, years: {} }
+      : data;
+    if (!storeObj.years || typeof storeObj.years !== 'object') storeObj.years = {};
+    storeObj.years[key] = {
+      ...(storeObj.years[key] || {}),
+      ...record,
+      fy: Number(fy),
+      updatedAt: new Date().toISOString()
+    };
+    if (setActive) storeObj.activeFy = Number(fy);
+    return storeObj.years[key];
+  });
+
+  try {
+    const backupService = require('./backupService');
+    backupService.backupFiscalYears(`บันทึกปีงบประมาณ ${fy}`, actor);
+  } catch (e) {}
+
+  return saved;
+}
+
+async function setActiveFiscalYear(fy, actor = 'system') {
+  const numFy = Number(fy);
+  const res = await fiscalYearsStore.update(data => {
+    const storeObj = (!data || typeof data !== 'object' || Array.isArray(data))
+      ? { activeFy: numFy, years: {} }
+      : data;
+    storeObj.activeFy = numFy;
+    return storeObj;
+  });
+
+  try {
+    const backupService = require('./backupService');
+    backupService.backupFiscalYears(`ตั้งค่าปีงบประมาณใช้งาน: ${numFy}`, actor);
+  } catch (e) {}
+
+  return res;
+}
+
+async function replaceStockCountsForFiscalYear(newCountsMap, actor = 'system', reason = 'เริ่มต้นปีงบประมาณใหม่') {
+  const now = new Date().toISOString();
+  let previousCount = 0;
+  let newCount = 0;
+
+  await countsStore.update(all => {
+    const keys = Object.keys(all);
+    previousCount = keys.length;
+    keys.forEach(k => delete all[k]);
+    Object.keys(newCountsMap || {}).forEach(code => {
+      all[code] = newCountsMap[code];
+      newCount++;
+    });
+    return all;
+  });
+
+  await countsAuditStore.update(history => {
+    history.push({
+      ts: now,
+      by: actor,
+      action: 'FISCAL_YEAR_ROLLOVER',
+      reason,
+      previousCount,
+      newCount
+    });
+    if (history.length > 5000) history.splice(0, history.length - 5000);
+    return history;
+  });
+
+  try {
+    const backupService = require('./backupService');
+    backupService.backupStockCounts(`${reason} (${newCount} รายการ)`, actor);
+  } catch (e) {}
+
+  return { previousCount, newCount };
 }
 
 function reloadAllStores() {
@@ -470,14 +587,16 @@ function reloadAllStores() {
   countsAuditStore.reload();
   drugSettingsStore.reload();
   substockTransfersStore.reload();
+  fiscalYearsStore.reload();
 }
 
 module.exports = {
-  receiptsStore, adjustmentsStore, countsStore, drugSettingsStore, substockTransfersStore,
+  receiptsStore, adjustmentsStore, countsStore, drugSettingsStore, substockTransfersStore, fiscalYearsStore,
   saveReceipt, findReceipts, listReceipts, itemDispenseUnits,
   saveAdjustment, listAdjustments, ADJUST_CATEGORIES,
   saveStockCount, saveStockCountsBatch, getStockCounts, getStockCount, getCountAudit, deleteStockCount, resetStockCounts,
   getDrugSettings, setDrugSettings,
   saveSubstockTransfer, listSubstockTransfers, deleteSubstockTransfer,
+  getFiscalYearsData, saveFiscalYearRecord, setActiveFiscalYear, replaceStockCountsForFiscalYear,
   reloadAllStores
 };

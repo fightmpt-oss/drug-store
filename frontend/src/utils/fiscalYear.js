@@ -24,6 +24,29 @@ export function prevFiscalYear(now = new Date()) {
   return { startDate: fmt(start), endDate: fmt(end), label: `ปีงบ ${end.getFullYear() + 543}` };
 }
 
+export function nextFiscalYear(now = new Date()) {
+  const cur = currentFiscalYear(now);
+  const start = new Date(cur.startDate);
+  start.setFullYear(start.getFullYear() + 1);
+  const end = new Date(cur.endDate);
+  end.setFullYear(end.getFullYear() + 1);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  const fy = end.getFullYear() + 543;
+  return { fy, startDate: fmt(start), endDate: fmt(end), label: `ปีงบ ${fy}` };
+}
+
+export function fiscalYearByBE(fyBE) {
+  const fy = Number(fyBE);
+  const endYearAD = fy - 543;
+  const startYearAD = endYearAD - 1;
+  return {
+    fy,
+    startDate: `${startYearAD}-10-01`,
+    endDate: `${endYearAD}-09-30`,
+    label: `ปีงบ ${fy}`
+  };
+}
+
 // ปีที่สิ้นสุดงวด ณ วันที่นั้น แบบ พ.ศ. (ใช้ตั้งชื่อปุ่ม/ป้าย เช่น "ก.ย. - ต.ค. 69")
 export function thaiYearShort(dateStr) {
   const y = new Date(dateStr).getFullYear() + 543;

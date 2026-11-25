@@ -558,5 +558,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ filename })
     });
+  },
+
+  // Fiscal Years & Year-End Carry-Forward Rollover (เริ่มต้นปีงบประมาณใหม่)
+  async getFiscalYears() {
+    return request('/stock/fiscal-years');
+  },
+
+  async previewFiscalYearRollover(params = {}) {
+    const query = new URLSearchParams(
+      Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    ).toString();
+    return request(`/stock/fiscal-years/rollover-preview${query ? `?${query}` : ''}`);
+  },
+
+  async executeFiscalYearRollover(payload) {
+    return request('/stock/fiscal-years/rollover', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
   }
 };

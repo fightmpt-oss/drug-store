@@ -15,8 +15,30 @@ const { getPool, isLive, isDemo, memoryStore, getConfig, assertDataAvailable, ge
 const { getAllJhcisDrugs, inferLocalUnit } = require('./matcherService');
 const {
   getStockCounts, getStockCount, findReceipts, listAdjustments, itemDispenseUnits, getDrugSettings,
-  listSubstockTransfers
+  listSubstockTransfers, getFiscalYearsData
 } = require('./localStore');
+
+// คืนค่าชุดผลตรวจนับยอดยกมาที่ตรงกับช่วงงวด (ถ้าดูปีย้อนหลังที่ปิดงวดแล้ว ให้ใช้ openingCounts ที่ archive ไว้ของปีนั้น)
+function getCountsForPeriod(startDate, endDate) {
+  const fyData = getFiscalYearsData();
+  const years = fyData && fyData.years ? Object.values(fyData.years) : [];
+  for (const fyRec of years) {
+    if (
+      fyRec &&
+      fyRec.openingCounts &&
+      Object.keys(fyRec.openingCounts).length > 0 &&
+      fyRec.startDate &&
+      fyRec.endDate &&
+      startDate >= fyRec.startDate &&
+      endDate <= fyRec.endDate
+    ) {
+      if (fyRec.status === 'closed' || (fyData.activeFy && Number(fyRec.fy) !== Number(fyData.activeFy))) {
+        return fyRec.openingCounts;
+      }
+    }
+  }
+  return getStockCounts();
+}
 
 function getDaysDiff(d1, d2 = new Date()) {
   const t1 = new Date(d1).getTime();
@@ -426,7 +448,7 @@ async function getDrugStockSummary(filters = {}) {
 
   const dispenseMap = await fetchDispenseDayMap(startDate, endDate);
   const jhcisReceiptRows = await fetchJhcisReceiptRows(startDate, endDate);
-  const counts = getStockCounts();
+  const counts = getCountsForPeriod(startDate, endDate);
   const allAdjustments = listAdjustments({ startDate, endDate });
   const allSubstockTransfers = listSubstockTransfers({ startDate, endDate });
   const mappings = memoryStore.drugMappings || [];
@@ -950,7 +972,7 @@ async function getStockCardDetail(drugcode, startDate, endDate, mode = 'main_sto
 
   const warnings = [];
   const baseTransactions = [];
-  const counts = getStockCounts();
+  const counts = getCountsForPeriod(S, E);
   const count = counts[drugcode] || null;
   const dispenseDayMap = (await fetchDispenseDayMap(S, E))[drugcode] || {};
   const receiptRowsAll = [

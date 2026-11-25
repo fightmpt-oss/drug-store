@@ -393,6 +393,80 @@ function backupReceipts(reason = 'นำเข้าใบรับยา', acto
 }
 
 /**
+ * 2e-2. สำรอง substock_transfers.json (ประวัติการเบิกยาคลังในไปเคาน์เตอร์)
+ */
+function backupSubstockTransfers(reason = 'บันทึกเบิกยาคลังใน', actor = 'system') {
+  ensureDir(BACKUP_DIR);
+  const transfersPath = path.join(LOCALDB_DIR, 'substock_transfers.json');
+  if (!fs.existsSync(transfersPath)) return null;
+
+  try {
+    const raw = fs.readFileSync(transfersPath, 'utf8');
+    const ts = getTimestampStr();
+    const backupName = `substock_transfers_${ts}.json`;
+    const targetPath = path.join(BACKUP_DIR, backupName);
+    const latestPath = path.join(BACKUP_DIR, 'substock_transfers_latest.json');
+
+    fs.writeFileSync(targetPath, raw, 'utf8');
+    fs.writeFileSync(latestPath, raw, 'utf8');
+
+    let count = 0;
+    try { count = JSON.parse(raw).length; } catch (e) {}
+
+    recordBackupEntry({
+      type: 'substock_transfers',
+      filename: backupName,
+      label: `ประวัติเบิกยาคลังในไปเคาน์เตอร์ (${count} รายการ)`,
+      reason,
+      actor,
+      sizeBytes: Buffer.byteLength(raw, 'utf8')
+    });
+
+    return backupName;
+  } catch (err) {
+    console.error('[BACKUP] Substock transfers backup failed:', err.message);
+    return null;
+  }
+}
+
+/**
+ * 2e-3. สำรอง fiscal_years.json (ข้อมูลปีงบประมาณและประวัติปิดงวด/ยกยอด)
+ */
+function backupFiscalYears(reason = 'อัปเดตปีงบประมาณ', actor = 'system') {
+  ensureDir(BACKUP_DIR);
+  const fyPath = path.join(LOCALDB_DIR, 'fiscal_years.json');
+  if (!fs.existsSync(fyPath)) return null;
+
+  try {
+    const raw = fs.readFileSync(fyPath, 'utf8');
+    const ts = getTimestampStr();
+    const backupName = `fiscal_years_${ts}.json`;
+    const targetPath = path.join(BACKUP_DIR, backupName);
+    const latestPath = path.join(BACKUP_DIR, 'fiscal_years_latest.json');
+
+    fs.writeFileSync(targetPath, raw, 'utf8');
+    fs.writeFileSync(latestPath, raw, 'utf8');
+
+    let yearCount = 0;
+    try { yearCount = Object.keys(JSON.parse(raw)?.years || {}).length; } catch (e) {}
+
+    recordBackupEntry({
+      type: 'fiscal_years',
+      filename: backupName,
+      label: `ข้อมูลปีงบประมาณและยอดยกมาแต่ละปี (${yearCount} ปี)`,
+      reason,
+      actor,
+      sizeBytes: Buffer.byteLength(raw, 'utf8')
+    });
+
+    return backupName;
+  } catch (err) {
+    console.error('[BACKUP] Fiscal years backup failed:', err.message);
+    return null;
+  }
+}
+
+/**
  * 2f. สำรองไฟล์ Drug Catalogue ที่ผู้ใช้อัปโหลด
  */
 function backupCatalogue(sourcePathOrBuffer, filename, reason = 'อัปโหลด Drug Catalogue', actor = 'system') {
@@ -448,7 +522,16 @@ function createFullSnapshot(reason = 'สำรองข้อมูลทั้
       stockCountsSummary: {
         totalItems: 0,
         keys: []
-      }
+      },
+      receipts: [],
+      receiptsSummary: {
+        totalReceipts: 0,
+        totalItems: 0
+      },
+      substockTransfers: [],
+      substockTransfersCount: 0,
+      adjustments: [],
+      fiscalYears: null
     };
 
     // 1. Config (ซ่อนรหัสผ่าน DB เสมอ)
@@ -482,6 +565,48 @@ function createFullSnapshot(reason = 'สำรองข้อมูลทั้
           keys: Object.keys(counts).slice(0, 100)
         };
       } catch (e) {}
+    }
+
+    // 5. Receipts
+    const receiptsPath = path.join(LOCALDB_DIR, 'receipts.json');
+    if (fs.existsSync(receiptsPath)) {
+      try {
+        const receipts = JSON.parse(fs.readFileSync(receiptsPath, 'utf8'));
+        if (Array.isArray(receipts)) {
+          snapshot.receipts = receipts;
+          snapshot.receiptsSummary = {
+            totalReceipts: receipts.length,
+            totalItems: receipts.reduce((s, r) => s + (Array.isArray(r.items) ? r.items.length : 0), 0)
+          };
+        }
+      } catch (e) {}
+    }
+
+    // 6. Substock Transfers
+    const substockPath = path.join(LOCALDB_DIR, 'substock_transfers.json');
+    if (fs.existsSync(substockPath)) {
+      try {
+        const transfers = JSON.parse(fs.readFileSync(substockPath, 'utf8'));
+        if (Array.isArray(transfers)) {
+          snapshot.substockTransfers = transfers;
+          snapshot.substockTransfersCount = transfers.length;
+        }
+      } catch (e) {}
+    }
+
+    // 7. Adjustments
+    const adjustmentsPath = path.join(LOCALDB_DIR, 'adjustments.json');
+    if (fs.existsSync(adjustmentsPath)) {
+      try {
+        const adj = JSON.parse(fs.readFileSync(adjustmentsPath, 'utf8'));
+        if (Array.isArray(adj)) snapshot.adjustments = adj;
+      } catch (e) {}
+    }
+
+    // 8. Fiscal Years
+    const fiscalPath = path.join(LOCALDB_DIR, 'fiscal_years.json');
+    if (fs.existsSync(fiscalPath)) {
+      try { snapshot.fiscalYears = JSON.parse(fs.readFileSync(fiscalPath, 'utf8')); } catch (e) {}
     }
 
     const ts = getTimestampStr();
@@ -537,6 +662,8 @@ function listBackups() {
       else if (filename.startsWith('drug_settings_')) type = 'drug_settings';
       else if (filename.startsWith('stock_counts_')) type = 'stock_counts';
       else if (filename.startsWith('receipts_')) type = 'receipts';
+      else if (filename.startsWith('substock_transfers_')) type = 'substock_transfers';
+      else if (filename.startsWith('fiscal_years_')) type = 'fiscal_years';
       else if (filename.startsWith('catalogue_')) type = 'catalogue';
       else if (filename.startsWith('full_snapshot_')) type = 'full_snapshot';
 
@@ -646,6 +773,30 @@ function restoreFromBackup(filename, actor = 'admin') {
     return { success: true, type: 'receipts', message: 'กู้คืนประวัติใบรับยาเรียบร้อยแล้ว' };
   }
 
+  if (safeFilename.startsWith('substock_transfers_')) {
+    const raw = fs.readFileSync(sourcePath, 'utf8');
+    ensureDir(LOCALDB_DIR);
+    const transfersPath = path.join(LOCALDB_DIR, 'substock_transfers.json');
+    fs.writeFileSync(transfersPath, raw, 'utf8');
+    try {
+      const localStore = require('./localStore');
+      if (typeof localStore.reloadAllStores === 'function') localStore.reloadAllStores();
+    } catch (e) {}
+    return { success: true, type: 'substock_transfers', message: 'กู้คืนประวัติเบิกยาคลังในเรียบร้อยแล้ว' };
+  }
+
+  if (safeFilename.startsWith('fiscal_years_')) {
+    const raw = fs.readFileSync(sourcePath, 'utf8');
+    ensureDir(LOCALDB_DIR);
+    const fyPath = path.join(LOCALDB_DIR, 'fiscal_years.json');
+    fs.writeFileSync(fyPath, raw, 'utf8');
+    try {
+      const localStore = require('./localStore');
+      if (typeof localStore.reloadAllStores === 'function') localStore.reloadAllStores();
+    } catch (e) {}
+    return { success: true, type: 'fiscal_years', message: 'กู้คืนข้อมูลปีงบประมาณเรียบร้อยแล้ว' };
+  }
+
   throw new Error(`ไม่รองรับการกู้คืนอัตโนมัติสำหรับไฟล์ประเภทนี้ (${safeFilename})`);
 }
 
@@ -659,6 +810,8 @@ module.exports = {
   backupDrugSettings,
   backupStockCounts,
   backupReceipts,
+  backupSubstockTransfers,
+  backupFiscalYears,
   backupCatalogue,
   createFullSnapshot,
   listBackups,

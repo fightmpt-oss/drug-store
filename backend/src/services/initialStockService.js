@@ -11,7 +11,8 @@ const { getAllJhcisDrugs, scoreDrugClinicalMatch, parseStrength, parseDosageForm
 const { memoryStore, saveMappings, getPcuCode } = require('../config/db');
 const {
   saveStockCount, saveStockCountsBatch, getStockCounts, getStockCount,
-  deleteStockCount, resetStockCounts, setDrugSettings, getDrugSettings
+  deleteStockCount, resetStockCounts, setDrugSettings, getDrugSettings,
+  getFiscalYearsData
 } = require('./localStore');
 
 function getAllInitialCounts() { return getStockCounts(); }
@@ -130,6 +131,99 @@ async function getInitialCountSummary() {
       updatedAt: g.updatedAt,
       items: g.items.sort((a, b) => String(a.drugname).localeCompare(String(b.drugname), 'th'))
     }));
+
+  // รวมประวัติปีงบประมาณเก่าที่ปิดงวดแล้ว (กรณีเปิดปีงบประมาณใหม่แล้ว แต่ต้องการดูยอดยกมาต้นปีก่อนย้อนหลัง)
+  const fyData = getFiscalYearsData();
+  const existingDates = new Set(countRecordsByDate.map(r => r.countDate));
+  Object.values(fyData?.years || {}).forEach(fyRec => {
+    if (!fyRec || !fyRec.openingCounts || Object.keys(fyRec.openingCounts).length === 0) return;
+    const archGroups = new Map();
+    Object.keys(fyRec.openingCounts).forEach(code => {
+      const it = fyRec.openingCounts[code];
+      if (!it) return;
+      const cDate = String(it.countDate || fyRec.startDate || '').trim();
+      if (!cDate || existingDates.has(cDate)) return;
+      const dInfo = drugMap.get(String(code).trim());
+      const dSettings = getDrugSettings(code) || {};
+      const factor = Number(dSettings.conversionFactor || dSettings.unitRatio) > 1
+        ? Number(dSettings.conversionFactor || dSettings.unitRatio)
+        : 1;
+      const isDualUnit = factor > 1 || Boolean(dSettings.isRepackaged);
+      const mainStoreUnit = isDualUnit ? (dSettings.mainStoreUnit || 'กระปุก') : (it.localUnit || dInfo?.drugunit || 'หน่วย');
+      const counterUnit = isDualUnit ? (dSettings.counterUnit || dSettings.substockUnit || dInfo?.drugunit || 'ตลับ') : (it.localUnit || dInfo?.drugunit || 'หน่วย');
+      const itemLots = Array.isArray(it.lots) && it.lots.length > 0
+        ? it.lots
+        : [{ amount: it.totalAmount || 0, costprice: 0, lotno: '', dateexpire: '' }];
+      let itemAmt = 0;
+      let itemVal = 0;
+      itemLots.forEach(l => {
+        const a = Number(l.amount) || 0;
+        const c = Number(l.costprice) || 0;
+        itemAmt += a;
+        itemVal += (a * c);
+      });
+      if (!archGroups.has(cDate)) {
+        archGroups.set(cDate, {
+          countDate: cDate,
+          itemCount: 0,
+          totalLots: 0,
+          totalUnits: 0,
+          totalValue: 0,
+          countedBySet: new Set(),
+          updatedAt: it.updatedAt || '',
+          isArchivedFiscalYear: true,
+          fiscalYear: fyRec.fy,
+          fiscalYearLabel: fyRec.label || `ปีงบประมาณ ${fyRec.fy}`,
+          items: []
+        });
+      }
+      const grp = archGroups.get(cDate);
+      grp.itemCount += 1;
+      grp.totalLots += itemLots.length;
+      grp.totalUnits += itemAmt;
+      grp.totalValue += itemVal;
+      if (it.countedBy) grp.countedBySet.add(it.countedBy);
+      if (it.updatedAt && (!grp.updatedAt || it.updatedAt > grp.updatedAt)) grp.updatedAt = it.updatedAt;
+      grp.items.push({
+        drugcode: code,
+        drugname: it.drugname || dInfo?.drugname || code,
+        drugunit: mainStoreUnit,
+        isDualUnit,
+        mainStoreUnit,
+        counterUnit,
+        conversionFactor: factor,
+        totalAmount: Number(it.totalAmount) || itemAmt,
+        totalValue: Math.round(itemVal * 100) / 100,
+        lots: itemLots.map(l => ({
+          lotno: l.lotno || '-',
+          dateexpire: l.dateexpire || '',
+          amount: Number(l.amount) || 0,
+          costprice: Number(l.costprice) || 0,
+          remark: l.remark || ''
+        })),
+        countedBy: it.countedBy || '',
+        remark: it.remark || '',
+        updatedAt: it.updatedAt || ''
+      });
+    });
+    archGroups.forEach(g => {
+      existingDates.add(g.countDate);
+      countRecordsByDate.push({
+        countDate: g.countDate,
+        itemCount: g.itemCount,
+        totalLots: g.totalLots,
+        totalUnits: g.totalUnits,
+        totalValue: Math.round(g.totalValue * 100) / 100,
+        countedBy: Array.from(g.countedBySet).join(', ') || 'เจ้าหน้าที่คลังยา',
+        updatedAt: g.updatedAt,
+        isArchivedFiscalYear: true,
+        fiscalYear: g.fiscalYear,
+        fiscalYearLabel: g.fiscalYearLabel,
+        items: g.items.sort((a, b) => String(a.drugname).localeCompare(String(b.drugname), 'th'))
+      });
+    });
+  });
+  countRecordsByDate.sort((a, b) => b.countDate.localeCompare(a.countDate));
 
   return {
     totalDrugsInPcu: drugs.length,
