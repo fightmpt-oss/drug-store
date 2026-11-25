@@ -29,6 +29,7 @@ import PaginationBar from './PaginationBar';
 
 export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
   const [loading, setLoading] = useState(true);
+  const [checkingOnline, setCheckingOnline] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
@@ -59,7 +60,10 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
   const [copiedSql, setCopiedSql] = useState(false);
 
   useEffect(() => {
-    loadDtamData(true);
+    // โหลดข้อมูลในเครื่องทันทีไม่ให้หน้าจอค้างรอเว็บ DTAM แล้วตรวจงวดใหม่แบบเบื้องหลัง
+    loadDtamData(false, true).then(() => {
+      handleCheckNewVersion(true);
+    });
   }, []);
 
   const loadDtamData = async (checkOnline = false, activeFilter = onlyActive) => {
@@ -77,7 +81,6 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
           setSuccessMsg(
             `ระบบตรวจพบไฟล์ Excel งวดใหม่บนเว็บไซต์ DTAM และซิงค์ข้อมูลอัตโนมัติเรียบร้อยแล้ว! (${statusRes.data.previousVersion} → ${statusRes.data.currentVersion} รวม ${statusRes.data.stats?.totalActive?.toLocaleString()} รายการ)`
           );
-          // Re-run audit with newly synced registry
           const refreshedAudit = await api.getDtamHerbsAudit(activeFilter);
           if (refreshedAudit.success) setAuditData(refreshedAudit.data);
           return;
@@ -88,6 +91,54 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
       setError(err.message || 'เกิดข้อผิดพลาดในการโหลดข้อมูลทะเบียนยาสมุนไพร DTAM');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCheckNewVersion = async (silent = false) => {
+    setCheckingOnline(true);
+    if (!silent) {
+      setError(null);
+      setSuccessMsg(null);
+    }
+    try {
+      const statusRes = await api.getDtamStatus(true);
+      if (statusRes.success && statusRes.data) {
+        const d = statusRes.data;
+        setStatusInfo(d);
+        const checkedTime = d.checkedAt
+          ? new Date(d.checkedAt).toLocaleTimeString('th-TH')
+          : new Date().toLocaleTimeString('th-TH');
+
+        if (d.autoSynced) {
+          setSuccessMsg(
+            `ตรวจพบไฟล์ Excel งวดใหม่บนเว็บ DTAM และซิงค์อัตโนมัติเรียบร้อยแล้ว! (${d.previousVersion} → ${d.currentVersion} รวม ${d.stats?.totalActive?.toLocaleString() || ''} รายการ)`
+          );
+          const refreshedAudit = await api.getDtamHerbsAudit(onlyActive);
+          if (refreshedAudit.success) setAuditData(refreshedAudit.data);
+        } else if (d.hasUpdate) {
+          setSuccessMsg(
+            `ตรวจพบไฟล์งวดใหม่บนหน้าเว็บ DTAM: ${d.online?.version || '-'} (งวดปัจจุบันในเครื่อง: ${d.currentVersion}) — สามารถกด "ซิงค์รหัสล่าสุดจากเว็บ DTAM" ได้ทันที`
+          );
+        } else if (d.online?.onlineAvailable) {
+          if (!silent) {
+            setSuccessMsg(
+              `ตรวจสอบหน้าเว็บ DTAM เรียบร้อย — ข้อมูลเป็นงวดล่าสุดแล้ว (${d.currentVersion} ตรงกับหน้าเว็บ DTAM: ${d.online?.version}) • ตรวจเมื่อ ${checkedTime}`
+            );
+          }
+        } else if (!silent) {
+          setError(
+            `ไม่สามารถเชื่อมต่อหน้าเว็บ DTAM (${d.portalUrl || 'dtam.moph.go.th'}) เพื่อตรวจงวดใหม่ได้: ${d.online?.error || 'ไม่มีการตอบสนอง'} (ยังใช้งานข้อมูลในเครื่องงวด ${d.currentVersion} ได้ตามปกติ)`
+          );
+        }
+      } else if (!silent) {
+        setError(statusRes.message || 'ตรวจสอบงวดใหม่ไม่สำเร็จ');
+      }
+    } catch (err) {
+      if (!silent) {
+        setError(err.message || 'เกิดข้อผิดพลาดระหว่างตรวจสอบงวดใหม่จากเว็บ DTAM');
+      }
+    } finally {
+      setCheckingOnline(false);
     }
   };
 
@@ -387,15 +438,26 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
             </h2>
 
             <p className="text-xs sm:text-sm lg:text-base text-emerald-100/90 leading-relaxed">
-              เปรียบเทียบข้อมูลยาสมุนไพรในตาราง <code className="bg-emerald-950/80 px-1.5 py-0.5 rounded text-emerald-300 font-mono font-bold">cdrug</code> ของหน่วยบริการ {onlyActive ? 'เฉพาะรายการที่ตั้งค่าว่า "มีใช้" ใน JHCIS (drugflag = 1)' : 'ทุกรายการ'} กับบัญชียาแผนไทยที่ได้รับการขึ้นทะเบียนมาตรฐาน 44,541 รายการจาก DTAM (ตัดยาที่ไม่ใช้/ไม่ได้ปรับปรุงออกเพื่อให้ตรงตามความเป็นจริง)
+              เปรียบเทียบข้อมูลยาสมุนไพรในตาราง <code className="bg-emerald-950/80 px-1.5 py-0.5 rounded text-emerald-300 font-mono font-bold">cdrug</code> ของหน่วยบริการ {onlyActive ? 'เฉพาะรายการที่ตั้งค่าว่า "มีใช้" ใน JHCIS (drugflag = 1)' : 'ทุกรายการ'} กับบัญชียาแผนไทยที่ได้รับการขึ้นทะเบียนมาตรฐาน {statusInfo?.stats?.totalActive?.toLocaleString() || '44,766'} รายการจาก DTAM (ตัดยาที่ไม่ใช้/ไม่ได้ปรับปรุงออกเพื่อให้ตรงตามความเป็นจริง)
             </p>
 
             {statusInfo?.builtAt && (
-              <p className="text-[11px] sm:text-xs text-emerald-300/80 flex items-center gap-1.5">
-                <Database className="w-3.5 h-3.5" />
-                <span>ฐานข้อมูลในระบบอัปเดตเมื่อ: {new Date(statusInfo.builtAt).toLocaleString('th-TH')}</span>
+              <div className="text-[11px] sm:text-xs text-emerald-300/80 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5" />
+                  <span>ฐานข้อมูลในระบบอัปเดตเมื่อ: {new Date(statusInfo.builtAt).toLocaleString('th-TH')}</span>
+                </span>
                 <span>• มีทั้งหมด {statusInfo.stats?.totalActive?.toLocaleString()} รายการ (ยกเลิก {statusInfo.stats?.revokedCount?.toLocaleString()} รายการ)</span>
-              </p>
+                <a
+                  href={statusInfo?.portalUrl || 'https://www.dtam.moph.go.th/thai-med-code/'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 hover:bg-white/20 text-emerald-200 underline decoration-dotted transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>เปิดหน้าเว็บ DTAM</span>
+                </a>
+              </div>
             )}
           </div>
 
@@ -404,8 +466,8 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
             <button
               type="button"
               onClick={handleSyncOnline}
-              disabled={syncing || loading}
-              className="flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-lg hover:shadow-emerald-500/25 active:scale-95 disabled:opacity-50 cursor-pointer"
+              disabled={syncing || checkingOnline}
+              className="flex items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs sm:text-sm transition-all shadow-lg hover:shadow-emerald-500/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 ${syncing ? 'animate-spin' : ''}`} />
               <span>{syncing ? 'กำลังซิงค์จากเว็บ DTAM...' : '🔄 ซิงค์รหัสล่าสุดจากเว็บ DTAM'}</span>
@@ -413,12 +475,13 @@ export default function DtamHerbalAuditTab({ fs = {}, onSwitchToSqlTab }) {
 
             <button
               type="button"
-              onClick={() => loadDtamData(true)}
-              disabled={loading || syncing}
-              className="flex items-center gap-1.5 px-3.5 py-2.5 sm:py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm transition-colors border border-white/15 cursor-pointer"
+              onClick={() => handleCheckNewVersion(false)}
+              disabled={checkingOnline || syncing}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 sm:py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm transition-colors border border-white/15 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              title="ตรวจสอบไฟล์งวดใหม่ล่าสุดจากเว็บไซต์กรมการแพทย์แผนไทยและการแพทย์ทางเลือก"
             >
-              <ExternalLink className="w-4 h-4 text-emerald-300" />
-              <span>ตรวจงวดใหม่</span>
+              <RefreshCw className={`w-4 h-4 text-emerald-300 ${checkingOnline ? 'animate-spin' : ''}`} />
+              <span>{checkingOnline ? 'กำลังตรวจงวดใหม่...' : 'ตรวจงวดใหม่'}</span>
             </button>
           </div>
         </div>

@@ -174,68 +174,100 @@ function rebuildRegistryFromXlsx(xlsxPath, detectedVersion = 'No_01-165') {
 }
 
 /**
+ * Perform HTTPS GET while following 3xx redirects cleanly
+ */
+function httpsGetFollowRedirects(targetUrl, options = {}, maxRedirects = 3) {
+  return new Promise((resolve, reject) => {
+    const attempt = (urlStr, redirectsLeft) => {
+      const req = https.get(urlStr, options, (res) => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
+          res.resume();
+          const nextUrl = new URL(res.headers.location, urlStr).toString();
+          attempt(nextUrl, redirectsLeft - 1);
+          return;
+        }
+        resolve(res);
+      });
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Connection timeout to DTAM server'));
+      });
+    };
+    attempt(targetUrl, maxRedirects);
+  });
+}
+
+/**
  * Check DTAM online portal for the latest release info
  */
 async function fetchOnlineMasterInfo() {
-  return new Promise((resolve, reject) => {
-    const req = https.get(DTAM_PORTAL_URL, {
+  const checkedAt = new Date().toISOString();
+  try {
+    const res = await httpsGetFollowRedirects(DTAM_PORTAL_URL, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'th,en-US;q=0.9,en;q=0.8'
       },
       timeout: 10000
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        // Find No_01-xxx.xlsx link
-        const dlMatch = data.match(/href=["'](https?:\/\/www\.dtam\.moph\.go\.th\/dtam-dl\/\d+\/[^"']*)["'][^>]*>\s*No_01-(\d+)\.xlsx/i)
-          || data.match(/href=["'](https?:\/\/www\.dtam\.moph\.go\.th\/dtam-dl\/\d+\/[^"']*)["']/i);
-        
-        const noMatch = data.match(/No_01-(\d+)\.xlsx/i);
-        const versionNum = noMatch ? noMatch[1] : null;
-        const versionStr = versionNum ? `No_01-${versionNum}` : 'Unknown';
-        const downloadUrl = dlMatch ? dlMatch[1] : null;
-
-        // Try extracting stats
-        const singleMatch = data.match(/เดี่ยว\s*\|\s*([\d,]+)/);
-        const formulaMatch = data.match(/ตำรับ\s*\|\s*([\d,]+)/);
-        const revokedMatch = data.match(/รวม\s*\|\s*([\d,]+)/g);
-
-        resolve({
-          onlineAvailable: true,
-          version: versionStr,
-          versionNumber: versionNum ? parseInt(versionNum, 10) : 0,
-          filename: `No_01-${versionNum || 'latest'}.xlsx`,
-          downloadUrl,
-          statsPreview: {
-            single: singleMatch ? singleMatch[1] : '',
-            formula: formulaMatch ? formulaMatch[1] : ''
-          }
-        });
-      });
     });
 
-    req.on('error', (err) => {
-      resolve({
+    if (res.statusCode !== 200) {
+      res.resume();
+      return {
         onlineAvailable: false,
-        error: err.message,
+        error: `เว็บ DTAM ตอบกลับสถานะ HTTP ${res.statusCode}`,
         version: null,
-        downloadUrl: null
-      });
+        downloadUrl: null,
+        portalUrl: DTAM_PORTAL_URL,
+        checkedAt
+      };
+    }
+
+    const data = await new Promise((resolve, reject) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => resolve(body));
+      res.on('error', reject);
     });
 
-    req.on('timeout', () => {
-      req.destroy();
-      resolve({
-        onlineAvailable: false,
-        error: 'Connection timeout to DTAM server',
-        version: null,
-        downloadUrl: null
-      });
-    });
-  });
+    // Find No_01-xxx.xlsx link
+    const dlMatch = data.match(/href=["'](https?:\/\/www\.dtam\.moph\.go\.th\/dtam-dl\/\d+\/[^"']*)["'][^>]*>\s*No_01-(\d+)\.xlsx/i)
+      || data.match(/href=["'](https?:\/\/www\.dtam\.moph\.go\.th\/dtam-dl\/\d+\/[^"']*)["']/i);
+
+    const noMatch = data.match(/No_01-(\d+)\.xlsx/i);
+    const versionNum = noMatch ? noMatch[1] : null;
+    const versionStr = versionNum ? `No_01-${versionNum}` : 'Unknown';
+    const downloadUrl = dlMatch ? dlMatch[1] : null;
+
+    // Try extracting stats
+    const singleMatch = data.match(/เดี่ยว\s*\|\s*([\d,]+)/);
+    const formulaMatch = data.match(/ตำรับ\s*\|\s*([\d,]+)/);
+
+    return {
+      onlineAvailable: true,
+      version: versionStr,
+      versionNumber: versionNum ? parseInt(versionNum, 10) : 0,
+      filename: `No_01-${versionNum || 'latest'}.xlsx`,
+      downloadUrl,
+      portalUrl: DTAM_PORTAL_URL,
+      checkedAt,
+      statsPreview: {
+        single: singleMatch ? singleMatch[1] : '',
+        formula: formulaMatch ? formulaMatch[1] : ''
+      }
+    };
+  } catch (err) {
+    return {
+      onlineAvailable: false,
+      error: err.message,
+      version: null,
+      downloadUrl: null,
+      portalUrl: DTAM_PORTAL_URL,
+      checkedAt
+    };
+  }
 }
 
 /**
@@ -248,32 +280,29 @@ async function syncFromDtam() {
   }
 
   const tempFile = path.join(DTAM_DIR, `dtam_download_${Date.now()}.xlsx`);
-  
+
+  const res = await httpsGetFollowRedirects(onlineInfo.downloadUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': DTAM_PORTAL_URL
+    },
+    timeout: 30000
+  });
+
+  if (res.statusCode !== 200) {
+    res.resume();
+    throw new Error(`DTAM download returned HTTP ${res.statusCode}`);
+  }
+
   await new Promise((resolve, reject) => {
     const file = fs.createWriteStream(tempFile);
-    const req = https.get(onlineInfo.downloadUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': DTAM_PORTAL_URL
-      },
-      timeout: 30000
-    }, (res) => {
-      if (res.statusCode !== 200) {
-        reject(new Error(`DTAM download returned HTTP ${res.statusCode}`));
-        return;
-      }
-      res.pipe(file);
-      file.on('finish', () => {
-        file.close();
-        resolve();
-      });
+    res.pipe(file);
+    file.on('finish', () => {
+      file.close();
+      resolve();
     });
-
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('ดาวน์โหลดไฟล์จาก DTAM เกินเวลาที่กำหนด (Timeout 30s)'));
-    });
+    file.on('error', reject);
+    res.on('error', reject);
   });
 
   // Overwrite master xlsx
@@ -303,13 +332,17 @@ async function getDtamStatus(checkOnline = false) {
     autoSyncEnabled: true,
     autoSynced: false,
     previousVersion: null,
+    portalUrl: DTAM_PORTAL_URL,
+    checkedAt: null,
     online: null
   };
 
   if (checkOnline) {
+    res.checkedAt = new Date().toISOString();
     try {
       const online = await fetchOnlineMasterInfo();
       res.online = online;
+      res.checkedAt = online.checkedAt || res.checkedAt;
       if (online.onlineAvailable && online.version) {
         // Compare versions (e.g. No_01-165 vs No_01-166)
         const curNum = parseInt((res.currentVersion.match(/\d+$/) || ['0'])[0], 10);
@@ -336,7 +369,7 @@ async function getDtamStatus(checkOnline = false) {
         }
       }
     } catch (e) {
-      res.online = { onlineAvailable: false, error: e.message };
+      res.online = { onlineAvailable: false, error: e.message, portalUrl: DTAM_PORTAL_URL, checkedAt: res.checkedAt };
     }
   }
 
